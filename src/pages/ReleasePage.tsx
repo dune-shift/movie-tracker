@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type {
   Format,
+  LinkedFilm,
+  Movie,
   MovieDetails,
   Release,
   WatchProviderData,
@@ -13,7 +15,9 @@ import {
   getMovieDetails,
   getPosterUrl,
   getProviderLogoUrl,
+  getReleaseYear,
   getWatchProviders,
+  searchMovies,
 } from '../services/tmdb'
 
 interface ReleasePageProps {
