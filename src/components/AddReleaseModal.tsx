@@ -1,0 +1,557 @@
+import { useRef, useState } from 'react'
+import type { Release, LinkedFilm, Movie, Format } from '../types'
+import { FORMAT_OPTIONS, LABEL_OPTIONS } from '../types'
+import { getPosterUrl, getReleaseYear, searchMovies } from '../services/tmdb'
+
+interface AddReleaseModalProps {
+  onSave: (release: Release) => void
+  onClose: () => void
+}
+
+export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
+  const [step, setStep] = useState<1 | 2>(1)
+
+  // ── Step 1 fields ────────────────────────────────────────
+  const [title, setTitle] = useState('')
+  const [label, setLabel] = useState('')
+  const [format, setFormat] = useState<Format | ''>('')
+  const [releaseYear, setReleaseYear] = useState('')
+  const [spineNumber, setSpineNumber] = useState('')
+  const [discCount, setDiscCount] = useState('')
+  const [barcode, setBarcode] = useState('')
+  const [notes, setNotes] = useState('')
+  const [coverUrl, setCoverUrl] = useState('')
+  const [coverUrlInput, setCoverUrlInput] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
+
+  // ── Step 2 fields ────────────────────────────────────────
+  const [films, setFilms] = useState<LinkedFilm[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<Movie[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const filmIds = new Set(films.map((f) => f.tmdbId))
+
+  // ── Cover art handlers ───────────────────────────────────
+  function handleFileSelect(file: File) {
+    if (!file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setCoverUrl(e.target?.result as string)
+      setCoverUrlInput('')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFileSelect(file)
+  }
+
+  function handleUrlCommit(url: string) {
+    const trimmed = url.trim()
+    if (trimmed) {
+      setCoverUrl(trimmed)
+    } else {
+      setCoverUrl('')
+    }
+  }
+
+  function clearCover() {
+    setCoverUrl('')
+    setCoverUrlInput('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // ── Film search handlers ─────────────────────────────────
+  async function handleFilmSearch() {
+    const q = searchQuery.trim()
+    if (!q) return
+    setIsSearching(true)
+    setSearchError(null)
+    try {
+      const results = await searchMovies(q)
+      setSearchResults(results.slice(0, 10))
+    } catch {
+      setSearchError('Search failed. Check your API key.')
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  function addFilm(movie: Movie) {
+    if (filmIds.has(movie.id)) return
+    setFilms((prev) => [
+      ...prev,
+      {
+        tmdbId: movie.id,
+        title: movie.title,
+        year: getReleaseYear(movie.release_date),
+        posterPath: movie.poster_path,
+      },
+    ])
+  }
+
+  function removeFilm(tmdbId: number) {
+    setFilms((prev) => prev.filter((f) => f.tmdbId !== tmdbId))
+  }
+
+  // ── Save ────────────────────────────────────────────────
+  function handleSave() {
+    if (!title.trim()) return
+    onSave({
+      id: crypto.randomUUID(),
+      title: title.trim(),
+      label,
+      format,
+      releaseYear,
+      spineNumber,
+      discCount,
+      barcode,
+      notes,
+      coverUrl,
+      films,
+      addedAt: new Date().toISOString(),
+    })
+  }
+
+  const canAdvance = title.trim().length > 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 py-10 backdrop-blur-sm">
+      <div className="relative w-full max-w-3xl rounded-2xl border border-border bg-surface shadow-2xl">
+
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-white">Add Release</h2>
+            <p className="text-xs text-muted">
+              {step === 1 ? 'Release Details' : 'Link Films'} · Step {step} of 2
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              {([1, 2] as const).map((s) => (
+                <div
+                  key={s}
+                  className={`h-1.5 w-6 rounded-full transition-colors ${s <= step ? 'bg-accent' : 'bg-surface-overlay'}`}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-muted transition hover:bg-surface-overlay hover:text-white"
+              aria-label="Close"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* ── Step 1: Release Details ── */}
+        {step === 1 && (
+          <div className="p-6">
+            <div className="grid gap-6 sm:grid-cols-[180px_1fr]">
+
+              {/* Cover art */}
+              <div>
+                <p className="mb-2 text-xs text-muted">Cover Art</p>
+
+                {/* Drop zone */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => !coverUrl && fileInputRef.current?.click()}
+                  onKeyDown={(e) => e.key === 'Enter' && !coverUrl && fileInputRef.current?.click()}
+                  className={`relative aspect-[2/3] overflow-hidden rounded-lg border-2 transition ${
+                    isDragging
+                      ? 'cursor-copy border-accent bg-accent/10'
+                      : coverUrl
+                        ? 'cursor-default border-border'
+                        : 'cursor-pointer border-dashed border-border bg-surface-overlay hover:border-accent/60'
+                  }`}
+                >
+                  {coverUrl ? (
+                    <img
+                      src={coverUrl}
+                      alt="Cover preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        className="h-8 w-8 text-muted"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+                        />
+                      </svg>
+                      <p className="text-[11px] leading-snug text-muted">
+                        Drop image or click to browse
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Clear button */}
+                  {coverUrl && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); clearCover() }}
+                      className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1 text-white backdrop-blur-sm transition hover:bg-black/80"
+                      aria-label="Remove cover"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                        <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleFileSelect(file)
+                  }}
+                />
+
+                {/* URL input */}
+                <input
+                  type="url"
+                  placeholder="Or paste image URL…"
+                  value={coverUrlInput}
+                  onChange={(e) => setCoverUrlInput(e.target.value)}
+                  onBlur={(e) => handleUrlCommit(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleUrlCommit(coverUrlInput)}
+                  className="mt-2 w-full rounded-lg border border-border bg-surface-overlay px-3 py-1.5 text-[11px] text-white placeholder-muted/50 outline-none focus:border-accent"
+                />
+              </div>
+
+              {/* Form fields */}
+              <div className="space-y-4">
+                {/* Title */}
+                <label>
+                  <span className="mb-1.5 block text-xs text-muted">
+                    Release Title <span className="text-red-400">*</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Herzog: The Collection"
+                    autoFocus
+                    className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                  />
+                </label>
+
+                {/* Label + Format */}
+                <div className="grid grid-cols-2 gap-3">
+                  <label>
+                    <span className="mb-1.5 block text-xs text-muted">Label</span>
+                    <input
+                      type="text"
+                      list="add-label-options"
+                      value={label}
+                      onChange={(e) => setLabel(e.target.value)}
+                      placeholder="e.g. Shout! Factory"
+                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                    />
+                    <datalist id="add-label-options">
+                      {LABEL_OPTIONS.map((l) => (
+                        <option key={l} value={l} />
+                      ))}
+                    </datalist>
+                  </label>
+
+                  <label>
+                    <span className="mb-1.5 block text-xs text-muted">Format</span>
+                    <select
+                      value={format}
+                      onChange={(e) => setFormat(e.target.value as Format | '')}
+                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white outline-none focus:border-accent"
+                    >
+                      <option value="">Select…</option>
+                      {FORMAT_OPTIONS.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {/* Release Year + Spine */}
+                <div className="grid grid-cols-2 gap-3">
+                  <label>
+                    <span className="mb-1.5 block text-xs text-muted">Release Year</span>
+                    <input
+                      type="number"
+                      value={releaseYear}
+                      onChange={(e) => setReleaseYear(e.target.value)}
+                      placeholder="2023"
+                      min="1894"
+                      max="2099"
+                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-xs text-muted">Spine / Catalog #</span>
+                    <input
+                      type="text"
+                      value={spineNumber}
+                      onChange={(e) => setSpineNumber(e.target.value)}
+                      placeholder="e.g. CC-123"
+                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                    />
+                  </label>
+                </div>
+
+                {/* Disc Count + Barcode */}
+                <div className="grid grid-cols-2 gap-3">
+                  <label>
+                    <span className="mb-1.5 block text-xs text-muted">Disc Count</span>
+                    <input
+                      type="number"
+                      value={discCount}
+                      onChange={(e) => setDiscCount(e.target.value)}
+                      placeholder="1"
+                      min="1"
+                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-1.5 block text-xs text-muted">Barcode / UPC</span>
+                    <input
+                      type="text"
+                      value={barcode}
+                      onChange={(e) => setBarcode(e.target.value)}
+                      placeholder="826663190069"
+                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                    />
+                  </label>
+                </div>
+
+                {/* Notes */}
+                <label>
+                  <span className="mb-1.5 block text-xs text-muted">Notes</span>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Slipcover edition, factory sealed, limited print, etc."
+                    rows={2}
+                    className="w-full resize-none rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Link Films ── */}
+        {step === 2 && (
+          <div className="p-6">
+            <p className="mb-5 text-sm text-muted">
+              Search TMDB to link the films included in this release. This pulls
+              in poster art, director, and runtime. Optional — you can skip or
+              come back to this later.
+            </p>
+
+            {/* Search bar */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
+                placeholder="Search for a film on TMDB…"
+                autoFocus
+                className="flex-1 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={handleFilmSearch}
+                disabled={isSearching || !searchQuery.trim()}
+                className="rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-muted transition hover:bg-surface-raised hover:text-white disabled:opacity-40"
+              >
+                {isSearching ? '…' : 'Search'}
+              </button>
+            </div>
+
+            {searchError && (
+              <p className="mt-2 text-xs text-red-400">{searchError}</p>
+            )}
+
+            {/* Search results */}
+            {searchResults.length > 0 && (
+              <ul className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
+                {searchResults.map((movie) => {
+                  const added = filmIds.has(movie.id)
+                  const posterUrl = getPosterUrl(movie.poster_path)
+                  return (
+                    <li key={movie.id} className="border-b border-border last:border-0">
+                      <button
+                        type="button"
+                        onClick={() => addFilm(movie)}
+                        disabled={added}
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised disabled:opacity-50"
+                      >
+                        <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
+                          {posterUrl ? (
+                            <img
+                              src={posterUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full bg-surface-overlay" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-white">
+                            {movie.title}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {getReleaseYear(movie.release_date)}
+                          </p>
+                        </div>
+                        <span
+                          className={`flex-shrink-0 text-xs ${added ? 'text-accent' : 'text-muted'}`}
+                        >
+                          {added ? '✓ Added' : '+ Add'}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+
+            {/* Linked films list */}
+            <div className="mt-6">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
+                Films in this release
+                {films.length > 0 && (
+                  <span className="ml-1.5 normal-case text-accent-hover">
+                    ({films.length})
+                  </span>
+                )}
+              </p>
+
+              {films.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-xs text-muted">
+                  No films linked yet. Use the search above to add films.
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {films.map((film) => {
+                    const posterUrl = getPosterUrl(film.posterPath)
+                    return (
+                      <li
+                        key={film.tmdbId}
+                        className="flex items-center gap-3 rounded-lg border border-border bg-surface-overlay px-3 py-2"
+                      >
+                        <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
+                          {posterUrl ? (
+                            <img
+                              src={posterUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full bg-surface-raised" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-white">
+                            {film.title}
+                          </p>
+                          <p className="text-xs text-muted">{film.year}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFilm(film.tmdbId)}
+                          className="rounded p-1.5 text-muted transition hover:bg-surface-raised hover:text-white"
+                          aria-label={`Remove ${film.title}`}
+                        >
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="h-4 w-4"
+                          >
+                            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                          </svg>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Footer ── */}
+        <div className="flex items-center justify-between border-t border-border px-6 py-4">
+          <button
+            type="button"
+            onClick={step === 1 ? onClose : () => setStep(1)}
+            className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition hover:bg-surface-overlay hover:text-white"
+          >
+            {step === 1 ? 'Cancel' : '← Back'}
+          </button>
+
+          <div className="flex gap-2">
+            {step === 1 ? (
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                disabled={!canAdvance}
+                className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next: Link Films →
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition hover:bg-surface-overlay hover:text-white"
+                >
+                  Skip & Save
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={films.length === 0}
+                  className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Save Release
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

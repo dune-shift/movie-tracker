@@ -1,10 +1,67 @@
-import type { Movie } from '../types'
+import type {
+  Movie,
+  MovieCastMember,
+  MovieCrewMember,
+  MovieDetails,
+  WatchProvider,
+  WatchProviderData,
+} from '../types'
 
 const TMDB_BASE = 'https://api.themoviedb.org/3'
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500'
 
+const TOP_CREW_JOBS = [
+  'Screenplay',
+  'Writer',
+  'Story',
+  'Producer',
+  'Executive Producer',
+  'Director of Photography',
+  'Original Music Composer',
+  'Editor',
+] as const
+
 interface TmdbSearchResponse {
   results: Movie[]
+}
+
+interface TmdbCredits {
+  cast: { name: string; character: string; order: number }[]
+  crew: { name: string; job: string }[]
+}
+
+interface TmdbWatchProvidersResponse {
+  results: {
+    US?: {
+      flatrate?: WatchProvider[]
+      buy?: WatchProvider[]
+      rent?: WatchProvider[]
+      free?: WatchProvider[]
+      ads?: WatchProvider[]
+      link?: string
+    }
+  }
+}
+
+interface TmdbMovieDetailsResponse {
+  id: number
+  title: string
+  release_date: string
+  poster_path: string | null
+  runtime: number | null
+  credits: TmdbCredits
+}
+
+function getApiKey(): string {
+  const apiKey = import.meta.env.VITE_TMDB_API_KEY
+
+  if (!apiKey || apiKey === 'your_tmdb_api_key_here') {
+    throw new Error(
+      'TMDB API key is missing. Add VITE_TMDB_API_KEY to your .env file.',
+    )
+  }
+
+  return apiKey
 }
 
 export function getPosterUrl(posterPath: string | null): string | null {
@@ -17,17 +74,43 @@ export function getReleaseYear(releaseDate: string): string {
   return releaseDate.slice(0, 4)
 }
 
-export async function searchMovies(query: string): Promise<Movie[]> {
-  const apiKey = import.meta.env.VITE_TMDB_API_KEY
+export function formatRuntime(minutes: number | null): string {
+  if (!minutes) return '—'
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  if (hours === 0) return `${mins}m`
+  if (mins === 0) return `${hours}h`
+  return `${hours}h ${mins}m`
+}
 
-  if (!apiKey || apiKey === 'your_tmdb_api_key_here') {
-    throw new Error(
-      'TMDB API key is missing. Add VITE_TMDB_API_KEY to your .env file.',
-    )
+function getDirector(crew: TmdbCredits['crew']): string | null {
+  return crew.find((member) => member.job === 'Director')?.name ?? null
+}
+
+function getTopCrew(crew: TmdbCredits['crew']): MovieCrewMember[] {
+  const seen = new Set<string>()
+  const topCrew: MovieCrewMember[] = []
+
+  for (const job of TOP_CREW_JOBS) {
+    const member = crew.find((person) => person.job === job)
+    if (!member || seen.has(`${member.job}:${member.name}`)) continue
+    seen.add(`${member.job}:${member.name}`)
+    topCrew.push({ name: member.name, job: member.job })
   }
 
+  return topCrew
+}
+
+function getTopCast(cast: TmdbCredits['cast'], limit = 8): MovieCastMember[] {
+  return [...cast]
+    .sort((a, b) => a.order - b.order)
+    .slice(0, limit)
+    .map(({ name, character }) => ({ name, character }))
+}
+
+export async function searchMovies(query: string): Promise<Movie[]> {
   const params = new URLSearchParams({
-    api_key: apiKey,
+    api_key: getApiKey(),
     query: query.trim(),
     include_adult: 'false',
   })
@@ -40,4 +123,50 @@ export async function searchMovies(query: string): Promise<Movie[]> {
 
   const data: TmdbSearchResponse = await response.json()
   return data.results
+}
+
+export async function getWatchProviders(
+  id: number,
+): Promise<WatchProviderData | null> {
+  try {
+    const params = new URLSearchParams({ api_key: getApiKey() })
+    const response = await fetch(
+      `${TMDB_BASE}/movie/${id}/watch/providers?${params}`,
+    )
+    if (!response.ok) return null
+    const data: TmdbWatchProvidersResponse = await response.json()
+    return data.results?.US ?? null
+  } catch {
+    return null
+  }
+}
+
+export function getProviderLogoUrl(logoPath: string): string {
+  return `https://image.tmdb.org/t/p/w45${logoPath}`
+}
+
+export async function getMovieDetails(id: number): Promise<MovieDetails> {
+  const params = new URLSearchParams({
+    api_key: getApiKey(),
+    append_to_response: 'credits',
+  })
+
+  const response = await fetch(`${TMDB_BASE}/movie/${id}?${params}`)
+
+  if (!response.ok) {
+    throw new Error(`TMDB request failed (${response.status})`)
+  }
+
+  const data: TmdbMovieDetailsResponse = await response.json()
+
+  return {
+    id: data.id,
+    title: data.title,
+    release_date: data.release_date,
+    poster_path: data.poster_path,
+    runtime: data.runtime,
+    director: getDirector(data.credits.crew),
+    topCrew: getTopCrew(data.credits.crew),
+    topCast: getTopCast(data.credits.cast),
+  }
 }
