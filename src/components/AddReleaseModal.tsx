@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { Release, LinkedFilm, Movie, Format } from '../types'
 import { FORMAT_OPTIONS, LABEL_OPTIONS } from '../types'
 import { getPosterUrl, getReleaseYear, searchMovies } from '../services/tmdb'
+import { BarcodeScanner } from './BarcodeScanner'
 
 interface AddReleaseModalProps {
   onSave: (release: Release) => void
@@ -14,7 +15,6 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
   // ── Step 1 fields ────────────────────────────────────────
   const [title, setTitle] = useState('')
   const [label, setLabel] = useState('')
-  const [format, setFormat] = useState<Format | ''>('')
   const [releaseYear, setReleaseYear] = useState('')
   const [spineNumber, setSpineNumber] = useState('')
   const [discCount, setDiscCount] = useState('')
@@ -23,6 +23,7 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
   const [coverUrl, setCoverUrl] = useState('')
   const [coverUrlInput, setCoverUrlInput] = useState('')
   const [isDragging, setIsDragging] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
 
   // ── Step 2 fields ────────────────────────────────────────
   const [films, setFilms] = useState<LinkedFilm[]>([])
@@ -93,12 +94,19 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
         title: movie.title,
         year: getReleaseYear(movie.release_date),
         posterPath: movie.poster_path,
+        format: '',
       },
     ])
   }
 
   function removeFilm(tmdbId: number) {
     setFilms((prev) => prev.filter((f) => f.tmdbId !== tmdbId))
+  }
+
+  function updateFilmFormat(tmdbId: number, fmt: Format | '') {
+    setFilms((prev) =>
+      prev.map((f) => (f.tmdbId === tmdbId ? { ...f, format: fmt } : f)),
+    )
   }
 
   // ── Save ────────────────────────────────────────────────
@@ -108,7 +116,6 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
       id: crypto.randomUUID(),
       title: title.trim(),
       label,
-      format,
       releaseYear,
       spineNumber,
       discCount,
@@ -129,31 +136,33 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
         {/* ── Header ── */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-white">Add Release</h2>
-            <p className="text-xs text-muted">
-              {step === 1 ? 'Release Details' : 'Link Films'} · Step {step} of 2
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1.5">
-              {([1, 2] as const).map((s) => (
-                <div
-                  key={s}
-                  className={`h-1.5 w-6 rounded-full transition-colors ${s <= step ? 'bg-accent' : 'bg-surface-overlay'}`}
-                />
-              ))}
+            <div className="mb-1.5 flex items-center gap-2">
+              <div className="flex gap-1">
+                {([1, 2] as const).map((s) => (
+                  <div
+                    key={s}
+                    className={`h-1 w-8 rounded-full transition-colors ${s <= step ? 'bg-accent' : 'bg-surface-overlay'}`}
+                  />
+                ))}
+              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-accent">
+                Step {step} of 2
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-muted transition hover:bg-surface-overlay hover:text-white"
-              aria-label="Close"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
-            </button>
+            <h2 className="text-base font-semibold text-white">
+              {step === 1 ? 'Add Release' : 'Add Films to this Release'}
+            </h2>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-muted transition hover:bg-surface-overlay hover:text-white"
+            aria-label="Close"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          </button>
         </div>
 
         {/* ── Step 1: Release Details ── */}
@@ -174,7 +183,7 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                   onDrop={handleDrop}
                   onClick={() => !coverUrl && fileInputRef.current?.click()}
                   onKeyDown={(e) => e.key === 'Enter' && !coverUrl && fileInputRef.current?.click()}
-                  className={`relative aspect-[2/3] overflow-hidden rounded-lg border-2 transition ${
+                  className={`relative aspect-[2/3] max-h-48 sm:max-h-none overflow-hidden rounded-lg border-2 transition ${
                     isDragging
                       ? 'cursor-copy border-accent bg-accent/10'
                       : coverUrl
@@ -264,41 +273,23 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                   />
                 </label>
 
-                {/* Label + Format */}
-                <div className="grid grid-cols-2 gap-3">
-                  <label>
-                    <span className="mb-1.5 block text-xs text-muted">Label</span>
-                    <input
-                      type="text"
-                      list="add-label-options"
-                      value={label}
-                      onChange={(e) => setLabel(e.target.value)}
-                      placeholder="e.g. Shout! Factory"
-                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
-                    />
-                    <datalist id="add-label-options">
-                      {LABEL_OPTIONS.map((l) => (
-                        <option key={l} value={l} />
-                      ))}
-                    </datalist>
-                  </label>
-
-                  <label>
-                    <span className="mb-1.5 block text-xs text-muted">Format</span>
-                    <select
-                      value={format}
-                      onChange={(e) => setFormat(e.target.value as Format | '')}
-                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white outline-none focus:border-accent"
-                    >
-                      <option value="">Select…</option>
-                      {FORMAT_OPTIONS.map((f) => (
-                        <option key={f} value={f}>
-                          {f}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
+                {/* Label */}
+                <label>
+                  <span className="mb-1.5 block text-xs text-muted">Label</span>
+                  <input
+                    type="text"
+                    list="add-label-options"
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    placeholder="e.g. Shout! Factory"
+                    className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                  />
+                  <datalist id="add-label-options">
+                    {LABEL_OPTIONS.map((l) => (
+                      <option key={l} value={l} />
+                    ))}
+                  </datalist>
+                </label>
 
                 {/* Release Year + Spine */}
                 <div className="grid grid-cols-2 gap-3">
@@ -339,16 +330,36 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                       className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
                     />
                   </label>
-                  <label>
+                  <div>
                     <span className="mb-1.5 block text-xs text-muted">Barcode / UPC</span>
-                    <input
-                      type="text"
-                      value={barcode}
-                      onChange={(e) => setBarcode(e.target.value)}
-                      placeholder="826663190069"
-                      className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
-                    />
-                  </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={barcode}
+                        onChange={(e) => setBarcode(e.target.value)}
+                        placeholder="826663190069"
+                        className="flex-1 min-w-0 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowScanner(true)}
+                        className="flex-shrink-0 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-muted transition hover:bg-surface-raised hover:text-white"
+                        aria-label="Scan barcode with camera"
+                        title="Scan barcode with camera"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          className="h-4 w-4"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Notes */}
@@ -367,7 +378,7 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
           </div>
         )}
 
-        {/* ── Step 2: Link Films ── */}
+        {/* ── Step 2: Add Films ── */}
         {step === 2 && (
           <div className="p-6">
             <p className="mb-5 text-sm text-muted">
@@ -487,6 +498,20 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                           </p>
                           <p className="text-xs text-muted">{film.year}</p>
                         </div>
+                        <select
+                          value={film.format ?? ''}
+                          onChange={(e) =>
+                            updateFilmFormat(film.tmdbId, e.target.value as Format | '')
+                          }
+                          className="flex-shrink-0 rounded-md border border-border bg-surface-overlay px-2 py-1 text-xs text-white outline-none focus:border-accent"
+                        >
+                          <option value="">Format…</option>
+                          {FORMAT_OPTIONS.map((f) => (
+                            <option key={f} value={f}>
+                              {f}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           onClick={() => removeFilm(film.tmdbId)}
@@ -520,7 +545,7 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
             {step === 1 ? 'Cancel' : '← Back'}
           </button>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             {step === 1 ? (
               <button
                 type="button"
@@ -528,7 +553,7 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                 disabled={!canAdvance}
                 className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Next: Link Films →
+                Next: Add Films →
               </button>
             ) : (
               <>
@@ -552,6 +577,17 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
           </div>
         </div>
       </div>
+
+      {/* ── Barcode scanner overlay ── */}
+      {showScanner && (
+        <BarcodeScanner
+          onScan={(code) => {
+            setBarcode(code)
+            setShowScanner(false)
+          }}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
     </div>
   )
 }

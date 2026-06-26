@@ -1,18 +1,23 @@
 import { Link } from 'react-router-dom'
-import type { Release } from '../types'
+import type { Format, MovieGroup, Release } from '../types'
 import { getPosterUrl } from '../services/tmdb'
+import { MovieGroupCard } from './MovieGroupCard'
 
 interface CollectionGridProps {
   releases: Release[]
+  viewMode: 'releases' | 'movies'
+  movieGroups: MovieGroup[]
 }
 
-export function CollectionGrid({ releases }: CollectionGridProps) {
+export function CollectionGrid({
+  releases,
+  viewMode,
+  movieGroups,
+}: CollectionGridProps) {
   if (releases.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-surface-raised/50 px-6 py-20 text-center">
-        <p className="text-sm text-muted">
-          Your collection is empty.
-        </p>
+        <p className="text-sm text-muted">Your collection is empty.</p>
         <p className="mt-1 text-xs text-muted/60">
           Click "Add Release" to log your first physical release.
         </p>
@@ -20,6 +25,18 @@ export function CollectionGrid({ releases }: CollectionGridProps) {
     )
   }
 
+  // ── Movies view ──────────────────────────────────────────
+  if (viewMode === 'movies') {
+    return (
+      <ul className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+        {movieGroups.map((group) => (
+          <MovieGroupCard key={group.key} group={group} />
+        ))}
+      </ul>
+    )
+  }
+
+  // ── Releases view (default) ──────────────────────────────
   return (
     <ul className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {releases.map((release) => {
@@ -68,11 +85,24 @@ export function CollectionGrid({ releases }: CollectionGridProps) {
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
-                  {release.format && (
-                    <span className="rounded-md bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent-hover">
-                      {release.format}
+                  {[
+                    ...new Set(
+                      release.films
+                        .map((f) => f.format)
+                        .filter((f): f is Format => !!f),
+                    ),
+                  ].map((fmt) => (
+                    <span
+                      key={fmt}
+                      className="rounded-md bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent-hover"
+                    >
+                      {fmt === '4K Ultra HD Blu-ray'
+                        ? '4K'
+                        : fmt === 'Standard Blu-ray'
+                          ? 'Blu-ray'
+                          : fmt}
                     </span>
-                  )}
+                  ))}
                   {Number(release.discCount) > 1 && (
                     <span className="rounded-md bg-surface-overlay px-2 py-0.5 text-[10px] font-medium text-muted">
                       {release.discCount} discs

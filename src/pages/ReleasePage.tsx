@@ -40,6 +40,13 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
   >({})
   const fetchedFilmIds = useRef<Set<number>>(new Set())
 
+  // ── Add-film search state ────────────────────────────────
+  const [showFilmSearch, setShowFilmSearch] = useState(false)
+  const [filmSearchQuery, setFilmSearchQuery] = useState('')
+  const [filmSearchResults, setFilmSearchResults] = useState<Movie[]>([])
+  const [isFilmSearching, setIsFilmSearching] = useState(false)
+  const [filmSearchError, setFilmSearchError] = useState<string | null>(null)
+
   useEffect(() => {
     if (!release) {
       navigate('/', { replace: true })
@@ -63,6 +70,51 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
         .catch(() => {})
     }
   }, [release, navigate])
+
+  async function handleFilmSearch() {
+    const q = filmSearchQuery.trim()
+    if (!q) return
+    setIsFilmSearching(true)
+    setFilmSearchError(null)
+    try {
+      const results = await searchMovies(q)
+      setFilmSearchResults(results.slice(0, 10))
+    } catch {
+      setFilmSearchError('Search failed. Check your API key.')
+      setFilmSearchResults([])
+    } finally {
+      setIsFilmSearching(false)
+    }
+  }
+
+  function addFilmToRelease(movie: Movie) {
+    if (!release) return
+    if (release.films.some((f) => f.tmdbId === movie.id)) return
+    const newFilm: LinkedFilm = {
+      tmdbId: movie.id,
+      title: movie.title,
+      year: getReleaseYear(movie.release_date),
+      posterPath: movie.poster_path,
+      format: '',
+    }
+    onUpdate(release.id, { films: [...release.films, newFilm] })
+  }
+
+  function removeFilmFromRelease(tmdbId: number) {
+    if (!release) return
+    onUpdate(release.id, {
+      films: release.films.filter((f) => f.tmdbId !== tmdbId),
+    })
+  }
+
+  function updateFilmFormat(tmdbId: number, fmt: Format | '') {
+    if (!release) return
+    onUpdate(release.id, {
+      films: release.films.map((f) =>
+        f.tmdbId === tmdbId ? { ...f, format: fmt } : f,
+      ),
+    })
+  }
 
   if (!release) return null
 
@@ -140,16 +192,8 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
           </header>
 
           {/* Release metadata */}
-          {(release.format || release.spineNumber || release.discCount || release.barcode) && (
+          {(release.spineNumber || release.discCount || release.barcode) && (
             <dl className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {release.format && (
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wider text-muted">
-                    Format
-                  </dt>
-                  <dd className="mt-1 text-sm text-white">{release.format}</dd>
-                </div>
-              )}
               {release.spineNumber && (
                 <div>
                   <dt className="text-xs font-medium uppercase tracking-wider text-muted">
@@ -189,15 +233,111 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
           )}
 
           {/* ── Films ── */}
-          {release.films.length > 0 && (
-            <section>
-              <h2 className="mb-4 text-sm font-medium text-white">
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-white">
                 Films in this Release{' '}
                 <span className="font-normal text-muted">
                   ({release.films.length})
                 </span>
               </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFilmSearch((v) => !v)
+                  setFilmSearchQuery('')
+                  setFilmSearchResults([])
+                  setFilmSearchError(null)
+                }}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition hover:bg-surface-overlay hover:text-white"
+              >
+                {showFilmSearch ? '✕ Cancel' : '+ Add Film'}
+              </button>
+            </div>
 
+            {/* Search panel */}
+            {showFilmSearch && (
+              <div className="mb-4 rounded-xl border border-border bg-surface-raised p-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={filmSearchQuery}
+                    onChange={(e) => setFilmSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
+                    placeholder="Search TMDB for a film…"
+                    autoFocus
+                    className="flex-1 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleFilmSearch}
+                    disabled={isFilmSearching || !filmSearchQuery.trim()}
+                    className="rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-muted transition hover:bg-surface-raised hover:text-white disabled:opacity-40"
+                  >
+                    {isFilmSearching ? '…' : 'Search'}
+                  </button>
+                </div>
+
+                {filmSearchError && (
+                  <p className="mt-2 text-xs text-red-400">{filmSearchError}</p>
+                )}
+
+                {filmSearchResults.length > 0 && (
+                  <ul className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
+                    {filmSearchResults.map((movie) => {
+                      const alreadyAdded = release.films.some(
+                        (f) => f.tmdbId === movie.id,
+                      )
+                      const posterUrl = getPosterUrl(movie.poster_path)
+                      return (
+                        <li
+                          key={movie.id}
+                          className="border-b border-border last:border-0"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => addFilmToRelease(movie)}
+                            disabled={alreadyAdded}
+                            className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised disabled:opacity-50"
+                          >
+                            <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
+                              {posterUrl ? (
+                                <img
+                                  src={posterUrl}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full bg-surface-overlay" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-white">
+                                {movie.title}
+                              </p>
+                              <p className="text-xs text-muted">
+                                {getReleaseYear(movie.release_date)}
+                              </p>
+                            </div>
+                            <span
+                              className={`flex-shrink-0 text-xs ${alreadyAdded ? 'text-accent' : 'text-muted'}`}
+                            >
+                              {alreadyAdded ? '✓ Added' : '+ Add'}
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {release.films.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
+                No films linked yet. Use the "Add Film" button above to link films.
+              </div>
+            ) : (
               <div className="space-y-3">
                 {release.films.map((film) => {
                   const details = filmDetails[film.tmdbId]
@@ -234,8 +374,20 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                   return (
                     <div
                       key={film.tmdbId}
-                      className="rounded-xl border border-border bg-surface-raised p-4"
+                      className="relative rounded-xl border border-border bg-surface-raised p-4"
                     >
+                      {/* Remove button */}
+                      <button
+                        type="button"
+                        onClick={() => removeFilmFromRelease(film.tmdbId)}
+                        className="absolute right-3 top-3 rounded-full p-1 text-muted transition hover:bg-surface-overlay hover:text-white"
+                        aria-label={`Remove ${film.title}`}
+                      >
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                        </svg>
+                      </button>
+
                       <div className="flex gap-4">
                         {/* Poster */}
                         <div className="flex-shrink-0">
@@ -256,6 +408,22 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-white">{film.title}</p>
                           <p className="text-xs text-muted">{film.year}</p>
+
+                          {/* Per-film format selector */}
+                          <select
+                            value={film.format ?? ''}
+                            onChange={(e) =>
+                              updateFilmFormat(film.tmdbId, e.target.value as Format | '')
+                            }
+                            className="mt-1.5 rounded-md border border-border bg-surface-overlay px-2 py-1 text-xs text-white outline-none focus:border-accent"
+                          >
+                            <option value="">Set format…</option>
+                            {FORMAT_OPTIONS.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
+                          </select>
 
                           {details && (
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
@@ -363,8 +531,8 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                   )
                 })}
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
           {/* ── Edit Release ── */}
           <section className="rounded-xl border border-border bg-surface-raised p-5">
@@ -400,27 +568,6 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                     <option key={l} value={l} />
                   ))}
                 </datalist>
-              </label>
-
-              {/* Format */}
-              <label>
-                <span className="mb-1.5 block text-xs text-muted">Format</span>
-                <select
-                  value={release.format}
-                  onChange={(e) =>
-                    onUpdate(release.id, {
-                      format: e.target.value as Format | '',
-                    })
-                  }
-                  className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white outline-none focus:border-accent"
-                >
-                  <option value="">Select…</option>
-                  {FORMAT_OPTIONS.map((f) => (
-                    <option key={f} value={f}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
               </label>
 
               {field('Release Year', release.releaseYear, 'releaseYear', 'number')}

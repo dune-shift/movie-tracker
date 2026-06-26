@@ -41,6 +41,7 @@ export interface LinkedFilm {
   title: string
   year: string
   posterPath: string | null
+  format?: Format | ''
 }
 
 // The primary entity — a physical release on your shelf
@@ -48,7 +49,6 @@ export interface Release {
   id: string
   title: string
   label: string
-  format: Format | ''
   releaseYear: string
   spineNumber: string
   discCount: string
@@ -57,6 +57,17 @@ export interface Release {
   coverUrl: string // base64 data URL or external image URL
   films: LinkedFilm[]
   addedAt: string
+}
+
+// ── Derived / computed types ────────────────────────────────
+
+// One film with all the physical releases that contain it
+export interface MovieGroup {
+  key: string             // tmdbId as string, or title-slug for unlinked releases
+  tmdbId: number | null
+  title: string
+  posterPath: string | null
+  releases: Release[]
 }
 
 // ── TMDB types ─────────────────────────────────────────────
