@@ -103,7 +103,7 @@ export function CollectionGrid({
                           : fmt}
                     </span>
                   ))}
-                  {Number(release.discCount) > 1 && (
+                  {release.discCount !== '' && release.discCount > 1 && (
                     <span className="rounded-md bg-surface-overlay px-2 py-0.5 text-[10px] font-medium text-muted">
                       {release.discCount} discs
                     </span>

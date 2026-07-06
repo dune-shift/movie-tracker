@@ -74,6 +74,13 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
     })
   }, [releases, filterLabel, filterFormat])
 
+  // Groups for the full (unfiltered) collection — used for the total count.
+  // Memoised separately so countLabel doesn't trigger a second full traversal.
+  const allMovieGroups = useMemo(
+    () => buildMovieGroups(releases),
+    [releases],
+  )
+
   const movieGroups = useMemo(
     () => buildMovieGroups(filteredReleases),
     [filteredReleases],
@@ -85,7 +92,7 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
   const countLabel = useMemo(() => {
     if (releases.length === 0) return 'No releases yet'
     if (viewMode === 'movies') {
-      const total = buildMovieGroups(releases).length
+      const total = allMovieGroups.length
       const shown = movieGroups.length
       if (hasActiveFilter) {
         return `${shown} of ${total} ${total === 1 ? 'film' : 'films'}`
@@ -96,7 +103,7 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
       return `${filteredReleases.length} of ${releases.length} ${releases.length === 1 ? 'release' : 'releases'}`
     }
     return `${releases.length} ${releases.length === 1 ? 'release' : 'releases'}`
-  }, [releases, filteredReleases, movieGroups, viewMode, hasActiveFilter])
+  }, [releases, filteredReleases, allMovieGroups, movieGroups, viewMode, hasActiveFilter])
 
   return (
     <>

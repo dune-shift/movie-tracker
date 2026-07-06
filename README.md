@@ -1,73 +1,68 @@
-# React + TypeScript + Vite
+# Kinobin
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A personal physical media collection tracker. Log your Blu-rays, 4K discs, DVDs, and other releases, link them to TMDB for poster art and crew info, and scan barcodes with your camera.
 
-Currently, two official plugins are available:
+## Getting started
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### 1. Clone and install
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+git clone https://github.com/dune-shift/movie-tracker.git
+cd movie-tracker
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Set up your TMDB API key
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Create a `.env` file in the project root (see `.env.example`):
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+VITE_TMDB_API_KEY=your_tmdb_api_key_here
+```
+
+Get a free API key at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api).
+
+> **Security note:** Because this is a client-side app, `VITE_*` variables are compiled into the JS bundle at build time. Your key will be visible to anyone who inspects the bundle. See [Securing your API key](#securing-your-api-key) below before deploying publicly.
+
+### 3. Run
+
+```bash
+npm run dev
+```
+
+---
+
+## Securing your API key
+
+Kinobin authenticates with TMDB using a `Bearer` token header (not a query-string parameter), so your key won't appear in browser history or server request logs during normal use. However, the key is still embedded in the compiled JS bundle.
+
+**Before deploying to a public URL:**
+
+1. Log in to [themoviedb.org](https://www.themoviedb.org) → **Settings → API**.
+2. Under your API key, find the **Allowed Domains / Referrers** field.
+3. Add only the domain(s) you deploy from (e.g., `yourapp.netlify.app`).
+
+With domain allowlisting enabled, TMDB will reject any request that doesn't originate from your approved domains — limiting the blast radius if your key is ever extracted from the bundle.
+
+> If you run Kinobin only locally and never deploy it, domain allowlisting isn't critical. But it's a one-minute setup and worth doing.
+
+---
+
+## Data storage
+
+All collection data is stored in your browser's `localStorage` under the key `kinobin-releases`. Nothing is sent to any external server.
+
+**Storage limit:** browsers cap localStorage at ~5 MB per origin. Custom cover images are automatically compressed to a max of 800 px / 80% JPEG quality (~50–150 KB each) before being stored. If you hit the limit, you'll see an alert prompting you to remove a release with a large cover image.
+
+> **Migrating from Fizpedia?** If you had data stored under the old `fizpedia-releases` key, Kinobin automatically migrates it to `kinobin-releases` on first load. No action required.
+
+---
+
+## Tech stack
+
+- [React](https://react.dev) + [TypeScript](https://www.typescriptlang.org)
+- [Vite](https://vitejs.dev)
+- [Tailwind CSS](https://tailwindcss.com)
+- [React Router](https://reactrouter.com)
+- [@zxing/browser](https://github.com/zxing-js/library) for barcode scanning
+- [TMDB API](https://developer.themoviedb.org) for movie metadata

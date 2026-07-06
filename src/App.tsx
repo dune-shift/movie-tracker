@@ -4,7 +4,22 @@ import { HomePage } from './pages/HomePage'
 import { ReleasePage } from './pages/ReleasePage'
 import { useLocalStorage } from './hooks/useLocalStorage'
 
-const STORAGE_KEY = 'fizpedia-releases'
+const STORAGE_KEY = 'kinobin-releases'
+const LEGACY_KEY = 'fizpedia-releases'
+
+// One-time migration: carry data forward from the old 'fizpedia-releases' key.
+// Runs once on load; harmless if the old key doesn't exist.
+;(function migrateStorage() {
+  try {
+    const legacy = window.localStorage.getItem(LEGACY_KEY)
+    if (legacy && !window.localStorage.getItem(STORAGE_KEY)) {
+      window.localStorage.setItem(STORAGE_KEY, legacy)
+      window.localStorage.removeItem(LEGACY_KEY)
+    }
+  } catch {
+    // Ignore — storage may be unavailable in some environments.
+  }
+})()
 
 function App() {
   const [releases, setReleases] = useLocalStorage<Release[]>(STORAGE_KEY, [])
@@ -28,7 +43,7 @@ function App() {
       <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <header className="mb-10 border-b border-border pb-8">
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            Fizpedia
+            Kinobin
           </h1>
           <p className="mt-2 text-sm text-muted">
             Your personal physical media collection.

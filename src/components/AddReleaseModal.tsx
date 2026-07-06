@@ -15,9 +15,9 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
   // ── Step 1 fields ────────────────────────────────────────
   const [title, setTitle] = useState('')
   const [label, setLabel] = useState('')
-  const [releaseYear, setReleaseYear] = useState('')
+  const [releaseYear, setReleaseYear] = useState<number | ''>('')
   const [spineNumber, setSpineNumber] = useState('')
-  const [discCount, setDiscCount] = useState('')
+  const [discCount, setDiscCount] = useState<number | ''>('')
   const [barcode, setBarcode] = useState('')
   const [notes, setNotes] = useState('')
   const [coverUrl, setCoverUrl] = useState('')
@@ -36,14 +36,50 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
   const filmIds = new Set(films.map((f) => f.tmdbId))
 
   // ── Cover art handlers ───────────────────────────────────
+  /**
+   * Compress the selected image via an offscreen canvas before storing it as
+   * a base64 data URL. Without this, a single high-res scan can exceed 3–5 MB,
+   * quickly blowing through localStorage's ~5 MB per-origin quota.
+   *
+   * Target: max 800 px on the longest side, JPEG at 80 % quality → ~50–150 KB.
+   */
   function handleFileSelect(file: File) {
     if (!file.type.startsWith('image/')) return
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      setCoverUrl(e.target?.result as string)
+
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+
+      const MAX = 800
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        if (width >= height) {
+          height = Math.round((height * MAX) / width)
+          width = MAX
+        } else {
+          width = Math.round((width * MAX) / height)
+          height = MAX
+        }
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+
+      const compressed = canvas.toDataURL('image/jpeg', 0.8)
+      setCoverUrl(compressed)
       setCoverUrlInput('')
     }
-    reader.readAsDataURL(file)
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+    }
+
+    img.src = objectUrl
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -298,7 +334,9 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                     <input
                       type="number"
                       value={releaseYear}
-                      onChange={(e) => setReleaseYear(e.target.value)}
+                      onChange={(e) =>
+                        setReleaseYear(e.target.value === '' ? '' : Number(e.target.value))
+                      }
                       placeholder="2023"
                       min="1894"
                       max="2099"
@@ -324,7 +362,9 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                     <input
                       type="number"
                       value={discCount}
-                      onChange={(e) => setDiscCount(e.target.value)}
+                      onChange={(e) =>
+                        setDiscCount(e.target.value === '' ? '' : Number(e.target.value))
+                      }
                       placeholder="1"
                       min="1"
                       className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"

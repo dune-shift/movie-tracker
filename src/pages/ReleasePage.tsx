@@ -131,7 +131,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
 
   function field(
     label: string,
-    value: string,
+    value: string | number | '',
     key: keyof Release,
     type: 'text' | 'number' = 'text',
   ) {
@@ -140,8 +140,13 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
         <span className="mb-1.5 block text-xs text-muted">{label}</span>
         <input
           type={type}
-          value={value}
-          onChange={(e) => onUpdate(release!.id, { [key]: e.target.value })}
+          value={String(value)}
+          onChange={(e) => {
+            const raw = e.target.value
+            onUpdate(release!.id, {
+              [key]: type === 'number' ? (raw === '' ? '' : Number(raw)) : raw,
+            })
+          }}
           className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white outline-none focus:border-accent"
         />
       </label>

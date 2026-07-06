@@ -49,9 +49,11 @@ export interface Release {
   id: string
   title: string
   label: string
-  releaseYear: string
+  /** Physical release year, e.g. 2023. Empty string means "not set". */
+  releaseYear: number | ''
   spineNumber: string
-  discCount: string
+  /** Number of discs in the set. Empty string means "not set". */
+  discCount: number | ''
   barcode: string
   notes: string
   coverUrl: string // base64 data URL or external image URL

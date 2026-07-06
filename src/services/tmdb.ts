@@ -64,6 +64,24 @@ function getApiKey(): string {
   return apiKey
 }
 
+/**
+ * Thin fetch wrapper that authenticates via Bearer token header rather than
+ * embedding the API key in the URL (which would expose it in server logs,
+ * browser history, and network-tab request URLs).
+ */
+async function tmdbFetch(path: string, params?: Record<string, string>): Promise<Response> {
+  const url = new URL(`${TMDB_BASE}${path}`)
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+  }
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${getApiKey()}`,
+    },
+  })
+  return response
+}
+
 export function getPosterUrl(posterPath: string | null): string | null {
   if (!posterPath) return null
   return `${TMDB_IMAGE_BASE}${posterPath}`
@@ -109,13 +127,10 @@ function getTopCast(cast: TmdbCredits['cast'], limit = 8): MovieCastMember[] {
 }
 
 export async function searchMovies(query: string): Promise<Movie[]> {
-  const params = new URLSearchParams({
-    api_key: getApiKey(),
+  const response = await tmdbFetch('/search/movie', {
     query: query.trim(),
     include_adult: 'false',
   })
-
-  const response = await fetch(`${TMDB_BASE}/search/movie?${params}`)
 
   if (!response.ok) {
     throw new Error(`TMDB request failed (${response.status})`)
@@ -129,10 +144,7 @@ export async function getWatchProviders(
   id: number,
 ): Promise<WatchProviderData | null> {
   try {
-    const params = new URLSearchParams({ api_key: getApiKey() })
-    const response = await fetch(
-      `${TMDB_BASE}/movie/${id}/watch/providers?${params}`,
-    )
+    const response = await tmdbFetch(`/movie/${id}/watch/providers`)
     if (!response.ok) return null
     const data: TmdbWatchProvidersResponse = await response.json()
     return data.results?.US ?? null
@@ -146,12 +158,9 @@ export function getProviderLogoUrl(logoPath: string): string {
 }
 
 export async function getMovieDetails(id: number): Promise<MovieDetails> {
-  const params = new URLSearchParams({
-    api_key: getApiKey(),
+  const response = await tmdbFetch(`/movie/${id}`, {
     append_to_response: 'credits',
   })
-
-  const response = await fetch(`${TMDB_BASE}/movie/${id}?${params}`)
 
   if (!response.ok) {
     throw new Error(`TMDB request failed (${response.status})`)
