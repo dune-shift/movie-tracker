@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import type { Release, LinkedFilm, Movie, Format } from '../types'
-import { FORMAT_OPTIONS, LABEL_OPTIONS } from '../types'
+import type { Release, LinkedFilm, Movie, Format, Genre } from '../types'
+import { FORMAT_OPTIONS, GENRE_OPTIONS, LABEL_OPTIONS } from '../types'
 import { getPosterUrl, getReleaseYear, searchMovies } from '../services/tmdb'
 import { BarcodeScanner } from './BarcodeScanner'
 
@@ -31,6 +31,10 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
   const [searchResults, setSearchResults] = useState<Movie[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  // Which film's genre panel is currently expanded (null = none)
+  const [openGenrePanel, setOpenGenrePanel] = useState<number | null>(null)
+  // In-progress tag text input per film (keyed by tmdbId)
+  const [tagInputs, setTagInputs] = useState<Record<number, string>>({})
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const filmIds = new Set(films.map((f) => f.tmdbId))
@@ -131,6 +135,8 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
         year: getReleaseYear(movie.release_date),
         posterPath: movie.poster_path,
         format: '',
+        genres: [],
+        tags: [],
       },
     ])
   }
@@ -142,6 +148,45 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
   function updateFilmFormat(tmdbId: number, fmt: Format | '') {
     setFilms((prev) =>
       prev.map((f) => (f.tmdbId === tmdbId ? { ...f, format: fmt } : f)),
+    )
+  }
+
+  function toggleFilmGenre(tmdbId: number, genre: Genre) {
+    setFilms((prev) =>
+      prev.map((f) => {
+        if (f.tmdbId !== tmdbId) return f
+        const current = f.genres ?? []
+        return {
+          ...f,
+          genres: current.includes(genre)
+            ? current.filter((g) => g !== genre)
+            : [...current, genre],
+        }
+      }),
+    )
+  }
+
+  function addFilmTag(tmdbId: number, raw: string) {
+    const tag = raw.trim().toLowerCase()
+    if (!tag) return
+    setFilms((prev) =>
+      prev.map((f) => {
+        if (f.tmdbId !== tmdbId) return f
+        const current = f.tags ?? []
+        if (current.includes(tag)) return f
+        return { ...f, tags: [...current, tag] }
+      }),
+    )
+    setTagInputs((prev) => ({ ...prev, [tmdbId]: '' }))
+  }
+
+  function removeFilmTag(tmdbId: number, tag: string) {
+    setFilms((prev) =>
+      prev.map((f) =>
+        f.tmdbId === tmdbId
+          ? { ...f, tags: (f.tags ?? []).filter((t) => t !== tag) }
+          : f,
+      ),
     )
   }
 
@@ -516,56 +561,158 @@ export function AddReleaseModal({ onSave, onClose }: AddReleaseModalProps) {
                 <ul className="space-y-2">
                   {films.map((film) => {
                     const posterUrl = getPosterUrl(film.posterPath)
+                    const selectedGenres = film.genres ?? []
+                    const filmTags = film.tags ?? []
+                    const genrePanelOpen = openGenrePanel === film.tmdbId
                     return (
                       <li
                         key={film.tmdbId}
-                        className="flex items-center gap-3 rounded-lg border border-border bg-surface-overlay px-3 py-2"
+                        className="overflow-hidden rounded-lg border border-border bg-surface-overlay"
                       >
-                        <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
-                          {posterUrl ? (
-                            <img
-                              src={posterUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="h-full bg-surface-raised" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-white">
-                            {film.title}
-                          </p>
-                          <p className="text-xs text-muted">{film.year}</p>
-                        </div>
-                        <select
-                          value={film.format ?? ''}
-                          onChange={(e) =>
-                            updateFilmFormat(film.tmdbId, e.target.value as Format | '')
-                          }
-                          className="flex-shrink-0 rounded-md border border-border bg-surface-overlay px-2 py-1 text-xs text-white outline-none focus:border-accent"
-                        >
-                          <option value="">Format…</option>
-                          {FORMAT_OPTIONS.map((f) => (
-                            <option key={f} value={f}>
-                              {f}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => removeFilm(film.tmdbId)}
-                          className="rounded p-1.5 text-muted transition hover:bg-surface-raised hover:text-white"
-                          aria-label={`Remove ${film.title}`}
-                        >
-                          <svg
-                            viewBox="0 0 20 20"
-                            fill="currentColor"
-                            className="h-4 w-4"
+                        {/* ── Row 1: thumbnail · title · format · remove ── */}
+                        <div className="flex items-center gap-3 px-3 py-2">
+                          <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
+                            {posterUrl ? (
+                              <img
+                                src={posterUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-full bg-surface-raised" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-white">
+                              {film.title}
+                            </p>
+                            <p className="text-xs text-muted">{film.year}</p>
+                          </div>
+                          <select
+                            value={film.format ?? ''}
+                            onChange={(e) =>
+                              updateFilmFormat(film.tmdbId, e.target.value as Format | '')
+                            }
+                            className="flex-shrink-0 rounded-md border border-border bg-surface-overlay px-2 py-1 text-xs text-white outline-none focus:border-accent"
                           >
-                            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                          </svg>
-                        </button>
+                            <option value="">Format…</option>
+                            {FORMAT_OPTIONS.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => removeFilm(film.tmdbId)}
+                            className="rounded p-1.5 text-muted transition hover:bg-surface-raised hover:text-white"
+                            aria-label={`Remove ${film.title}`}
+                          >
+                            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                              <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                            </svg>
+                          </button>
+                        </div>
+
+                        {/* ── Row 2: genres + tags ── */}
+                        <div className="border-t border-border/40 px-3 pb-2.5 pt-2 space-y-2">
+                          {/* Genre toggle button + selected pills */}
+                          <div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenGenrePanel(genrePanelOpen ? null : film.tmdbId)
+                                }
+                                className={`rounded-md border px-2 py-0.5 text-[11px] transition ${
+                                  genrePanelOpen
+                                    ? 'border-accent bg-accent/10 text-accent'
+                                    : 'border-border text-muted hover:border-accent/50 hover:text-white'
+                                }`}
+                              >
+                                {selectedGenres.length === 0
+                                  ? '+ Genres'
+                                  : `Genres (${selectedGenres.length})`}
+                              </button>
+                              {selectedGenres.map((g) => (
+                                <span
+                                  key={g}
+                                  className="flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent-hover"
+                                >
+                                  {g}
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleFilmGenre(film.tmdbId, g)}
+                                    className="ml-0.5 text-accent-hover/60 hover:text-accent-hover"
+                                    aria-label={`Remove ${g}`}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                            {/* Expandable checkbox grid */}
+                            {genrePanelOpen && (
+                              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-border bg-surface p-3 sm:grid-cols-3">
+                                {GENRE_OPTIONS.map((g) => (
+                                  <label
+                                    key={g}
+                                    className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-surface-overlay"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedGenres.includes(g)}
+                                      onChange={() => toggleFilmGenre(film.tmdbId, g)}
+                                      className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+                                    />
+                                    <span className="text-[11px] text-white">{g}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Tags row */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {filmTags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted"
+                              >
+                                {tag}
+                                <button
+                                  type="button"
+                                  onClick={() => removeFilmTag(film.tmdbId, tag)}
+                                  className="hover:text-white"
+                                  aria-label={`Remove tag ${tag}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                            <input
+                              type="text"
+                              value={tagInputs[film.tmdbId] ?? ''}
+                              onChange={(e) =>
+                                setTagInputs((prev) => ({
+                                  ...prev,
+                                  [film.tmdbId]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ',') {
+                                  e.preventDefault()
+                                  addFilmTag(film.tmdbId, tagInputs[film.tmdbId] ?? '')
+                                }
+                              }}
+                              onBlur={() =>
+                                addFilmTag(film.tmdbId, tagInputs[film.tmdbId] ?? '')
+                              }
+                              placeholder="Add tag, press Enter…"
+                              className="min-w-[140px] flex-1 rounded-md border border-border bg-transparent px-2 py-0.5 text-[11px] text-white placeholder-muted/40 outline-none focus:border-accent"
+                            />
+                          </div>
+                        </div>
                       </li>
                     )
                   })}

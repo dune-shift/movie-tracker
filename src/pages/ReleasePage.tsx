@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type {
   Format,
+  Genre,
   LinkedFilm,
   Movie,
   MovieDetails,
   Release,
   WatchProviderData,
 } from '../types'
-import { FORMAT_OPTIONS, LABEL_OPTIONS } from '../types'
+import { FORMAT_OPTIONS, GENRE_OPTIONS, LABEL_OPTIONS } from '../types'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import {
   formatRuntime,
@@ -39,6 +40,10 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     Record<number, WatchProviderData | null>
   >({})
   const fetchedFilmIds = useRef<Set<number>>(new Set())
+
+  // ── Genre panel + tag input state ───────────────────────
+  const [openGenrePanel, setOpenGenrePanel] = useState<number | null>(null)
+  const [tagInputs, setTagInputs] = useState<Record<number, string>>({})
 
   // ── Add-film search state ────────────────────────────────
   const [showFilmSearch, setShowFilmSearch] = useState(false)
@@ -112,6 +117,48 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     onUpdate(release.id, {
       films: release.films.map((f) =>
         f.tmdbId === tmdbId ? { ...f, format: fmt } : f,
+      ),
+    })
+  }
+
+  function toggleFilmGenre(tmdbId: number, genre: Genre) {
+    if (!release) return
+    onUpdate(release.id, {
+      films: release.films.map((f) => {
+        if (f.tmdbId !== tmdbId) return f
+        const current = f.genres ?? []
+        return {
+          ...f,
+          genres: current.includes(genre)
+            ? current.filter((g) => g !== genre)
+            : [...current, genre],
+        }
+      }),
+    })
+  }
+
+  function addFilmTag(tmdbId: number, raw: string) {
+    if (!release) return
+    const tag = raw.trim().toLowerCase()
+    if (!tag) return
+    onUpdate(release.id, {
+      films: release.films.map((f) => {
+        if (f.tmdbId !== tmdbId) return f
+        const current = f.tags ?? []
+        if (current.includes(tag)) return f
+        return { ...f, tags: [...current, tag] }
+      }),
+    })
+    setTagInputs((prev) => ({ ...prev, [tmdbId]: '' }))
+  }
+
+  function removeFilmTag(tmdbId: number, tag: string) {
+    if (!release) return
+    onUpdate(release.id, {
+      films: release.films.map((f) =>
+        f.tmdbId === tmdbId
+          ? { ...f, tags: (f.tags ?? []).filter((t) => t !== tag) }
+          : f,
       ),
     })
   }
@@ -486,6 +533,111 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                             )}
                         </div>
                       </div>
+
+                      {/* ── Genres + Tags ── */}
+                      {(() => {
+                        const selectedGenres = film.genres ?? []
+                        const filmTags = film.tags ?? []
+                        const genrePanelOpen = openGenrePanel === film.tmdbId
+                        return (
+                          <div className="mt-3 border-t border-border pt-3 space-y-2">
+                            {/* Genre picker */}
+                            <div>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setOpenGenrePanel(genrePanelOpen ? null : film.tmdbId)
+                                  }
+                                  className={`rounded-md border px-2 py-0.5 text-[11px] transition ${
+                                    genrePanelOpen
+                                      ? 'border-accent bg-accent/10 text-accent'
+                                      : 'border-border text-muted hover:border-accent/50 hover:text-white'
+                                  }`}
+                                >
+                                  {selectedGenres.length === 0
+                                    ? '+ Genres'
+                                    : `Genres (${selectedGenres.length})`}
+                                </button>
+                                {selectedGenres.map((g) => (
+                                  <span
+                                    key={g}
+                                    className="flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent-hover"
+                                  >
+                                    {g}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleFilmGenre(film.tmdbId, g)}
+                                      className="ml-0.5 text-accent-hover/60 hover:text-accent-hover"
+                                      aria-label={`Remove ${g}`}
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                              {genrePanelOpen && (
+                                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-border bg-surface p-3 sm:grid-cols-3">
+                                  {GENRE_OPTIONS.map((g) => (
+                                    <label
+                                      key={g}
+                                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-surface-overlay"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedGenres.includes(g)}
+                                        onChange={() => toggleFilmGenre(film.tmdbId, g)}
+                                        className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+                                      />
+                                      <span className="text-[11px] text-white">{g}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {/* Tags */}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {filmTags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted"
+                                >
+                                  {tag}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFilmTag(film.tmdbId, tag)}
+                                    className="hover:text-white"
+                                    aria-label={`Remove tag ${tag}`}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                              <input
+                                type="text"
+                                value={tagInputs[film.tmdbId] ?? ''}
+                                onChange={(e) =>
+                                  setTagInputs((prev) => ({
+                                    ...prev,
+                                    [film.tmdbId]: e.target.value,
+                                  }))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ',') {
+                                    e.preventDefault()
+                                    addFilmTag(film.tmdbId, tagInputs[film.tmdbId] ?? '')
+                                  }
+                                }}
+                                onBlur={() =>
+                                  addFilmTag(film.tmdbId, tagInputs[film.tmdbId] ?? '')
+                                }
+                                placeholder="Add tag, press Enter…"
+                                className="min-w-[140px] flex-1 rounded-md border border-border bg-transparent px-2 py-0.5 text-[11px] text-white placeholder-muted/40 outline-none focus:border-accent"
+                              />
+                            </div>
+                          </div>
+                        )
+                      })()}
 
                       {/* Crew / Cast */}
                       {details &&

@@ -1,3 +1,28 @@
+export const GENRE_OPTIONS = [
+  'Action',
+  'Adventure',
+  'Animation',
+  'Biography',
+  'Comedy',
+  'Crime',
+  'Documentary',
+  'Drama',
+  'Family',
+  'Fantasy',
+  'Film-Noir',
+  'History',
+  'Holiday',
+  'Horror',
+  'Musical',
+  'Music Videos & Concerts',
+  'Mystery',
+  'Romance',
+  'Science Fiction',
+  'Thriller',
+  'War',
+  'Western',
+] as const
+
 export const FORMAT_OPTIONS = [
   '4K Ultra HD Blu-ray',
   'Standard Blu-ray',
@@ -34,6 +59,7 @@ export const LABEL_OPTIONS = [
 
 export type Format = (typeof FORMAT_OPTIONS)[number]
 export type Label = (typeof LABEL_OPTIONS)[number]
+export type Genre = (typeof GENRE_OPTIONS)[number]
 
 // A single film linked to a physical release via TMDB
 export interface LinkedFilm {
@@ -42,6 +68,8 @@ export interface LinkedFilm {
   year: string
   posterPath: string | null
   format?: Format | ''
+  genres?: Genre[]        // controlled genre taxonomy
+  tags?: string[]         // free-form user-defined micro-genre tags
 }
 
 // The primary entity — a physical release on your shelf
@@ -69,6 +97,7 @@ export interface MovieGroup {
   tmdbId: number | null
   title: string
   posterPath: string | null
+  genres: Genre[]         // aggregated from all linked film instances
   releases: Release[]
 }
 

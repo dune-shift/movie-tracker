@@ -18,9 +18,12 @@ function shortFormat(format: string): string {
 export function MovieGroupCard({ group }: MovieGroupCardProps) {
   const [expanded, setExpanded] = useState(false)
 
+  // In the Movies view, individual TMDB film posters take priority.
+  // Only fall back to the release's custom cover art if there's no TMDB poster.
   const coverSrc =
+    (group.posterPath ? getPosterUrl(group.posterPath) : null) ||
     group.releases[0]?.coverUrl ||
-    (group.posterPath ? getPosterUrl(group.posterPath) : null)
+    null
 
   const copyCount = group.releases.length
 

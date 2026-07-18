@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import type { MovieGroup, Release } from '../types'
-import { FORMAT_OPTIONS } from '../types'
+import type { Genre, MovieGroup, Release } from '../types'
+import { FORMAT_OPTIONS, GENRE_OPTIONS } from '../types'
 import { CollectionGrid } from '../components/CollectionGrid'
 import { AddReleaseModal } from '../components/AddReleaseModal'
 
@@ -12,26 +12,53 @@ interface HomePageProps {
 type ViewMode = 'releases' | 'movies'
 
 // Build a de-duplicated list of MovieGroups from a flat releases array.
-// Grouping key priority:
-//   1. Primary linked film's tmdbId  (releases that share the same film collapse)
-//   2. Release title                 (fallback for releases with no linked film)
+// Each linked film in a release gets its own MovieGroup entry. Releases that
+// share the same film (same tmdbId) collapse into one group with multiple
+// copies. Releases with no linked films fall back to a title-keyed group.
 function buildMovieGroups(releases: Release[]): MovieGroup[] {
   const map = new Map<string, MovieGroup>()
 
   for (const release of releases) {
-    const primaryFilm = release.films[0] ?? null
-    const key = primaryFilm ? `tmdb-${primaryFilm.tmdbId}` : `title-${release.title}`
-
-    if (map.has(key)) {
-      map.get(key)!.releases.push(release)
+    if (release.films.length === 0) {
+      // No linked films — fall back to a title-keyed group
+      const key = `title-${release.title}`
+      if (map.has(key)) {
+        map.get(key)!.releases.push(release)
+      } else {
+        map.set(key, {
+          key,
+          tmdbId: null,
+          title: release.title,
+          posterPath: null,
+          genres: [],
+          releases: [release],
+        })
+      }
     } else {
-      map.set(key, {
-        key,
-        tmdbId: primaryFilm?.tmdbId ?? null,
-        title: primaryFilm?.title ?? release.title,
-        posterPath: primaryFilm?.posterPath ?? null,
-        releases: [release],
-      })
+      // Create (or contribute to) a group for every film in this release
+      for (const film of release.films) {
+        const key = `tmdb-${film.tmdbId}`
+        if (map.has(key)) {
+          const group = map.get(key)!
+          // Avoid adding the same release more than once to a group
+          if (!group.releases.some((r) => r.id === release.id)) {
+            group.releases.push(release)
+            // Merge any new genres from this film instance
+            for (const g of (film.genres ?? [])) {
+              if (!group.genres.includes(g)) group.genres.push(g)
+            }
+          }
+        } else {
+          map.set(key, {
+            key,
+            tmdbId: film.tmdbId,
+            title: film.title,
+            posterPath: film.posterPath,
+            genres: [...(film.genres ?? [])],
+            releases: [release],
+          })
+        }
+      }
     }
   }
 
@@ -48,6 +75,7 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
   const [showModal, setShowModal] = useState(false)
   const [filterLabel, setFilterLabel] = useState('')
   const [filterFormat, setFilterFormat] = useState('')
+  const [filterGenre, setFilterGenre] = useState<Genre | ''>('')
   const [viewMode, setViewMode] = useState<ViewMode>('releases')
 
   // Derive unique labels present in the collection (sorted)
@@ -65,14 +93,21 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
     )
   }, [releases])
 
+  // Only show genre options actually used in the collection
+  const availableGenres = useMemo(() => {
+    return GENRE_OPTIONS.filter((g) =>
+      releases.some((r) => r.films.some((f) => f.genres?.includes(g))),
+    )
+  }, [releases])
+
   const filteredReleases = useMemo(() => {
     return releases.filter((r) => {
       if (filterLabel && r.label !== filterLabel) return false
-      if (filterFormat && !r.films.some((f) => f.format === filterFormat))
-        return false
+      if (filterFormat && !r.films.some((f) => f.format === filterFormat)) return false
+      if (filterGenre && !r.films.some((f) => f.genres?.includes(filterGenre as Genre))) return false
       return true
     })
-  }, [releases, filterLabel, filterFormat])
+  }, [releases, filterLabel, filterFormat, filterGenre])
 
   // Groups for the full (unfiltered) collection — used for the total count.
   // Memoised separately so countLabel doesn't trigger a second full traversal.
@@ -86,7 +121,7 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
     [filteredReleases],
   )
 
-  const hasActiveFilter = filterLabel !== '' || filterFormat !== ''
+  const hasActiveFilter = filterLabel !== '' || filterFormat !== '' || filterGenre !== ''
 
   // Count label for the subtitle — varies by view mode
   const countLabel = useMemo(() => {
@@ -205,19 +240,35 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
                 </option>
               ))}
             </select>
-            {/* Chevron icon */}
-            <svg
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
-            >
-              <path
-                fillRule="evenodd"
-                d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z"
-                clipRule="evenodd"
-              />
+            <svg viewBox="0 0 20 20" fill="currentColor" className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted">
+              <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
             </svg>
           </div>
+
+          {/* Genre filter — only shown when genres exist in the collection */}
+          {availableGenres.length > 0 && (
+            <div className="relative">
+              <select
+                value={filterGenre}
+                onChange={(e) => setFilterGenre(e.target.value as Genre | '')}
+                className={`appearance-none rounded-lg border px-3 py-1.5 pr-7 text-sm outline-none transition focus:border-accent ${
+                  filterGenre
+                    ? 'border-accent bg-accent/10 text-white'
+                    : 'border-border bg-surface-overlay text-muted hover:border-accent/50 hover:text-white'
+                }`}
+              >
+                <option value="">All Genres</option>
+                {availableGenres.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+              <svg viewBox="0 0 20 20" fill="currentColor" className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted">
+                <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+              </svg>
+            </div>
+          )}
 
           {/* Clear filters button */}
           {hasActiveFilter && (
@@ -226,6 +277,7 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
               onClick={() => {
                 setFilterLabel('')
                 setFilterFormat('')
+                setFilterGenre('')
               }}
               className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition hover:border-accent/50 hover:text-white"
             >
