@@ -55,27 +55,75 @@ function guessCategory(text: string): SpecialFeatureCategory | '' {
 }
 
 /**
+ * Pre-normalize raw Tesseract output before splitting into lines.
+ * Fixes the most common OCR artefacts so downstream parsers see
+ * a consistent set of separators.
+ */
+function normalizeOcr(raw: string): string {
+  return (
+    raw
+      // Unify all Unicode bullet / arrow / square variants → standard bullet •
+      .replace(/[●◆◉▪▸►◀■▶‣⁃◦○◘◙\u25CF\u25CB\u25AA\u25AB\u25B8\u25BA\u2024\u2027]/gu, '•')
+      // Lone * at start of a line (used as list marker) → •
+      .replace(/^[ \t]*\*[ \t]+/gm, '• ')
+      // Lone hyphen / en-dash / em-dash at start of a line → •
+      .replace(/^[ \t]*[-–—][ \t]+/gm, '• ')
+      // Tab characters between content → newline (OCR sometimes outputs columns with tabs)
+      .replace(/([^\n\t])\t+([^\n\t])/g, '$1\n$2')
+      // 4+ spaces between word characters → newline (OCR column-break artefact)
+      .replace(/(\w)[ ]{4,}(\w)/g, '$1\n$2')
+  )
+}
+
+/**
  * Expand a single OCR line into multiple items when inline bullet/separator
  * characters are present. Box backs commonly list features in a run-on
  * paragraph like: "Commentary • Interview with director • Trailer"
  */
 function expandInlineBullets(line: string): string[] {
-  // Split on: bullet chars, or " | " or " / " used as separators
-  // Use a lookahead/lookbehind to avoid splitting on hyphens inside words
   return line
-    .split(/\s*[•·\u2022\u2023\u25E6\u2043\u2219]\s*|\s{1,2}[|]\s{1,2}|\s{2,}\/\s{2,}/)
+    .split(
+      // bullet chars (standard + after normalizeOcr)
+      /\s*[•·\u2022\u2023\u25E6\u2043\u2219]\s*/ +
+      // pipe separator with surrounding spaces
+      '|[ \\t]{1,2}[|][ \\t]{1,2}' +
+      // inline * used as bullet
+      '|\\s+\\*\\s+' +
+      // en-dash or em-dash used as inline separator (space-surrounded)
+      '|\\s{1,2}[–—]\\s{1,2}',
+    )
     .map((s) => s.trim())
     .filter(Boolean)
 }
 
+/**
+ * Detect lines where Tesseract misread bullet chars as the letter 'e' or 'o'.
+ * Pattern: a standalone lowercase letter followed by a space and a capital word,
+ * repeated two or more times in the same line → split on those letters.
+ */
+function splitOnOcrBulletMisreads(line: string): string[] {
+  // Count how many times we see a lone 'e' or 'o' before a capitalized word
+  const eHits = (line.match(/\be [A-Z]/g) ?? []).length
+  if (eHits >= 2) {
+    return line.split(/\be +/).map((s) => s.trim()).filter(Boolean)
+  }
+  const oHits = (line.match(/\bo [A-Z]/g) ?? []).length
+  if (oHits >= 2) {
+    return line.split(/\bo +/).map((s) => s.trim()).filter(Boolean)
+  }
+  return [line]
+}
+
 function parseOcrText(raw: string): Candidate[] {
-  // First split on newlines, then expand inline bullets within each line
-  const lines = raw
+  // 1. Normalize OCR artefacts, 2. split on newlines,
+  // 3. expand inline bullets, 4. catch OCR-misread bullets
+  const lines = normalizeOcr(raw)
     .split('\n')
     .flatMap((line) => expandInlineBullets(line))
+    .flatMap((line) => splitOnOcrBulletMisreads(line))
 
   const FEATURE_HEADER =
-    /special\s+features?|bonus\s+(features?|content|material)|extras?|supplements?/i
+    /special\s+features?|bonus\s+(features?|content|material)|extras?|supplements?|contents?:|new\s+and\s+archival|archival\s+(features?|materials?)/i
 
   // Find where the special features block starts
   let blockStart = -1
@@ -91,7 +139,7 @@ function parseOcrText(raw: string): Candidate[] {
 
   const processLine = (line: string, inBlock: boolean) => {
     const cleaned = cleanLine(line)
-    if (cleaned.length < 4) return // too short to be useful
+    if (cleaned.length < 3) return // too short to be useful
     if (isNoise(cleaned)) return
 
     candidates.push({
@@ -128,10 +176,9 @@ interface CropRect {
 interface CropCanvasProps {
   imageSrc: string
   onConfirm: (rect: CropRect, naturalW: number, naturalH: number) => void
-  onSkip: () => void
 }
 
-function CropCanvas({ imageSrc, onConfirm, onSkip }: CropCanvasProps) {
+function CropCanvas({ imageSrc, onConfirm }: CropCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
   // rect stored in *canvas* coordinates
@@ -155,13 +202,17 @@ function CropCanvas({ imageSrc, onConfirm, onSkip }: CropCanvasProps) {
       const w = Math.abs(rect.w)
       const h = Math.abs(rect.h)
 
-      // Dim everything outside the selection
-      ctx.fillStyle = 'rgba(0,0,0,0.55)'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      ctx.clearRect(x, y, w, h)
-      ctx.drawImage(img, x, y, w, h, x, y, w, h)
+      // Dim everything OUTSIDE the selection using a composite punch-out
+      ctx.save()
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'
+      ctx.beginPath()
+      // Outer rect (whole canvas) minus inner rect (selection) = ring shape
+      ctx.rect(0, 0, canvas.width, canvas.height)
+      ctx.rect(x, y, w, h)
+      ctx.fill('evenodd')
+      ctx.restore()
 
-      // Selection border
+      // Selection border — solid outline only, no fill inside
       ctx.strokeStyle = '#6366f1'
       ctx.lineWidth = 2
       ctx.setLineDash([])
@@ -204,6 +255,7 @@ function CropCanvas({ imageSrc, onConfirm, onSkip }: CropCanvasProps) {
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.preventDefault() // prevent browser from treating canvas as a draggable image
     e.currentTarget.setPointerCapture(e.pointerId)
     const pos = getCanvasPos(e)
     dragStartRef.current = pos
@@ -264,35 +316,28 @@ function CropCanvas({ imageSrc, onConfirm, onSkip }: CropCanvasProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted">
-        Drag to select only the <span className="text-white">Special Features</span> section of the box,
-        then tap <span className="text-accent font-medium">Crop &amp; Scan</span>. Or skip to scan the whole image.
+        Drag a box around the <span className="text-white">Special Features</span> section, then tap{' '}
+        <span className="text-accent font-medium">Crop &amp; Scan</span>.
       </p>
       <div className="overflow-hidden rounded-xl border border-border bg-black">
         <canvas
           ref={canvasRef}
-          className="block w-full cursor-crosshair touch-none"
+          draggable={false}
+          className="block w-full cursor-crosshair touch-none select-none"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onDragStart={(e) => e.preventDefault()}
         />
       </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onSkip}
-          className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-muted transition hover:bg-surface-overlay hover:text-white"
-        >
-          Skip — Scan Full Image
-        </button>
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={!hasSelection}
-          className="flex-1 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Crop &amp; Scan
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={handleConfirm}
+        disabled={!hasSelection}
+        className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Crop &amp; Scan
+      </button>
     </div>
   )
 }
@@ -412,12 +457,6 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
     void naturalH
   }
 
-  function handleCropSkip() {
-    if (!pendingFile || !cropSrc) return
-    setPreviewSrc(cropSrc)
-    runOcr(pendingFile)
-  }
-
   // ── Candidate editing ───────────────────────────────────────────────────────
 
   function toggleCandidate(id: string) {
@@ -520,7 +559,29 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                 </p>
               )}
 
-              {/* Drop zone */}
+              {/* Primary: camera CTA */}
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl bg-accent px-6 py-10 text-center transition hover:bg-accent-hover active:scale-[0.98]"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="h-12 w-12 text-white/80"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                </svg>
+                <div>
+                  <p className="text-base font-semibold text-white">Take a Photo</p>
+                  <p className="mt-0.5 text-xs text-white/60">Point your camera at the box back</p>
+                </div>
+              </button>
+
+              {/* Secondary: upload file — small & subtle */}
               <div
                 role="button"
                 tabIndex={0}
@@ -529,25 +590,16 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
-                className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 px-6 py-10 text-center transition cursor-pointer ${
+                className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs transition ${
                   isDragging
-                    ? 'border-accent bg-accent/10'
-                    : 'border-dashed border-border bg-surface-overlay hover:border-accent/60 hover:bg-surface-raised'
+                    ? 'border-accent bg-accent/10 text-white'
+                    : 'border-border text-muted hover:border-border/80 hover:text-white/70'
                 }`}
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  className="h-10 w-10 text-muted"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 12V6.75A2.25 2.25 0 015.25 4.5h13.5A2.25 2.25 0 0121 6.75V12" />
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 flex-shrink-0">
+                  <path fillRule="evenodd" d="M1 5.25A2.25 2.25 0 013.25 3h13.5A2.25 2.25 0 0119 5.25v9.5A2.25 2.25 0 0116.75 17H3.25A2.25 2.25 0 011 14.75v-9.5zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 00.75-.75v-2.69l-2.22-2.219a.75.75 0 00-1.06 0l-1.91 1.909.47.47a.75.75 0 11-1.06 1.06L6.53 8.091a.75.75 0 00-1.06 0l-2.97 2.97zM12 7a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
                 </svg>
-                <div>
-                  <p className="text-sm font-medium text-white">Drop an image here</p>
-                  <p className="mt-1 text-xs text-muted">or click to browse your files</p>
-                </div>
+                Upload an image instead
               </div>
 
               {/* Hidden file inputs */}
@@ -572,25 +624,6 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                   if (file) handleFileSelect(file)
                 }}
               />
-
-              {/* Camera shortcut (mobile-friendly) */}
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface-raised px-4 py-3 text-sm text-muted transition hover:bg-surface-overlay hover:text-white"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  className="h-5 w-5"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-                </svg>
-                Use Camera
-              </button>
             </div>
           )}
 
@@ -599,7 +632,6 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
             <CropCanvas
               imageSrc={cropSrc}
               onConfirm={handleCropConfirm}
-              onSkip={handleCropSkip}
             />
           )}
 
