@@ -7,10 +7,13 @@ import type {
   Movie,
   MovieDetails,
   Release,
+  SpecialFeature,
+  SpecialFeatureCategory,
   WatchProviderData,
 } from '../types'
-import { FORMAT_OPTIONS, GENRE_OPTIONS, LABEL_OPTIONS } from '../types'
+import { FORMAT_OPTIONS, GENRE_OPTIONS, LABEL_OPTIONS, SPECIAL_FEATURE_CATEGORIES } from '../types'
 import { CollapsibleSection } from '../components/CollapsibleSection'
+import { BoxBackScanner } from '../components/BoxBackScanner'
 import {
   formatRuntime,
   getMovieDetails,
@@ -23,8 +26,9 @@ import {
 
 interface ReleasePageProps {
   releases: Release[]
-  onUpdate: (id: string, updates: Partial<Release>) => void
-  onRemove: (id: string) => void
+  userId: string
+  onUpdate: (id: string, updates: Partial<Release>) => Promise<void>
+  onRemove: (id: string) => Promise<void>
 }
 
 export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) {
@@ -51,6 +55,12 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
   const [filmSearchResults, setFilmSearchResults] = useState<Movie[]>([])
   const [isFilmSearching, setIsFilmSearching] = useState(false)
   const [filmSearchError, setFilmSearchError] = useState<string | null>(null)
+
+  // ── Special features state ───────────────────────────────
+  const [showBoxScanner, setShowBoxScanner] = useState(false)
+  const [showAddFeatureRow, setShowAddFeatureRow] = useState(false)
+  const [newFeatureName, setNewFeatureName] = useState('')
+  const [newFeatureCategory, setNewFeatureCategory] = useState<SpecialFeatureCategory | ''>('')
 
   useEffect(() => {
     if (!release) {
@@ -163,6 +173,33 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     })
   }
 
+  // ── Special features helpers ─────────────────────────────
+  function addSpecialFeatures(incoming: SpecialFeature[]) {
+    if (!release) return
+    const existing = release.specialFeatures ?? []
+    onUpdate(release.id, { specialFeatures: [...existing, ...incoming] })
+  }
+
+  function addSingleFeature() {
+    const name = newFeatureName.trim()
+    if (!name) return
+    addSpecialFeatures([{
+      id: crypto.randomUUID(),
+      name,
+      category: newFeatureCategory || undefined,
+    }])
+    setNewFeatureName('')
+    setNewFeatureCategory('')
+    setShowAddFeatureRow(false)
+  }
+
+  function removeSpecialFeature(featureId: string) {
+    if (!release) return
+    onUpdate(release.id, {
+      specialFeatures: (release.specialFeatures ?? []).filter((f) => f.id !== featureId),
+    })
+  }
+
   if (!release) return null
 
   const coverSrc =
@@ -213,15 +250,15 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
 
         {/* ── Cover ── */}
         <div className="mx-auto w-full max-w-[280px] lg:max-w-none">
-          <div className="aspect-[2/3] overflow-hidden rounded-xl border border-border bg-surface-overlay">
+          <div className="aspect-[5/6] overflow-hidden rounded-xl border border-border">
             {coverSrc ? (
               <img
                 src={coverSrc}
                 alt={`${release.title} cover`}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted">
+              <div className="flex h-full items-center justify-center bg-surface-overlay text-sm text-muted">
                 No cover
               </div>
             )}
@@ -691,6 +728,153 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
             )}
           </section>
 
+          {/* ── Special Features ── */}
+          {(() => {
+            const features = release.specialFeatures ?? []
+
+            // Build groups: keyed by category (or '' for uncategorised)
+            const grouped = new Map<string, SpecialFeature[]>()
+            for (const f of features) {
+              const key = f.category || ''
+              if (!grouped.has(key)) grouped.set(key, [])
+              grouped.get(key)!.push(f)
+            }
+            // Sort: named categories alphabetically, uncategorised last
+            const groupKeys = [...grouped.keys()].sort((a, b) => {
+              if (!a && b) return 1
+              if (a && !b) return -1
+              return a.localeCompare(b)
+            })
+
+            return (
+              <section>
+                {/* Section header */}
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-sm font-medium text-white">
+                    Special Features{' '}
+                    <span className="font-normal text-muted">({features.length})</span>
+                  </h2>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowBoxScanner(true)}
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition hover:bg-surface-overlay hover:text-white"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        className="h-3.5 w-3.5"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                      </svg>
+                      Scan Box Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddFeatureRow((v) => !v)}
+                      className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition hover:bg-surface-overlay hover:text-white"
+                    >
+                      {showAddFeatureRow ? '✕ Cancel' : '+ Add Feature'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inline quick-add row */}
+                {showAddFeatureRow && (
+                  <div className="mb-4 flex flex-wrap gap-2 rounded-xl border border-border bg-surface-raised p-3">
+                    <input
+                      type="text"
+                      placeholder="Feature name…"
+                      value={newFeatureName}
+                      onChange={(e) => setNewFeatureName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addSingleFeature()}
+                      autoFocus
+                      className="flex-1 min-w-[180px] rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                    />
+                    <select
+                      value={newFeatureCategory}
+                      onChange={(e) =>
+                        setNewFeatureCategory(e.target.value as SpecialFeatureCategory | '')
+                      }
+                      className="rounded-lg border border-border bg-surface-overlay px-2 py-2 text-sm text-white outline-none focus:border-accent"
+                    >
+                      <option value="">Category…</option>
+                      {SPECIAL_FEATURE_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={addSingleFeature}
+                      disabled={!newFeatureName.trim()}
+                      className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+
+                {/* Feature list */}
+                {features.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
+                    No special features logged yet. Use "Scan Box Back" to read them from a photo, or add them manually.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {groupKeys.map((groupKey) => {
+                      const groupItems = grouped.get(groupKey)!
+                      return (
+                        <div key={groupKey || '__none__'}>
+                          {/* Group header (only shown when there's a category) */}
+                          {groupKey && (
+                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted">
+                              {groupKey}
+                            </p>
+                          )}
+                          <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                            {groupItems.map((feat) => (
+                              <li
+                                key={feat.id}
+                                className="flex items-center gap-3 bg-surface-raised px-4 py-2.5"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <span className="text-sm text-white">{feat.name}</span>
+                                  {feat.disc && (
+                                    <span className="ml-2 text-[11px] text-muted">
+                                      Disc {feat.disc}
+                                    </span>
+                                  )}
+                                  {!groupKey && feat.category && (
+                                    <span className="ml-2 rounded-md bg-surface-overlay px-1.5 py-0.5 text-[10px] text-muted">
+                                      {feat.category}
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeSpecialFeature(feat.id)}
+                                  className="flex-shrink-0 rounded p-1 text-muted transition hover:bg-surface-overlay hover:text-white"
+                                  aria-label={`Remove ${feat.name}`}
+                                >
+                                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                                  </svg>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </section>
+            )
+          })()}
+
           {/* ── Edit Release ── */}
           <section className="rounded-xl border border-border bg-surface-raised p-5">
             <h2 className="mb-4 text-sm font-medium text-white">Edit Release</h2>
@@ -753,6 +937,17 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
           </section>
         </div>
       </div>
+
+      {/* ── Box Back Scanner modal ── */}
+      {showBoxScanner && (
+        <BoxBackScanner
+          onSave={(features) => {
+            addSpecialFeatures(features)
+            setShowBoxScanner(false)
+          }}
+          onClose={() => setShowBoxScanner(false)}
+        />
+      )}
     </div>
   )
 }

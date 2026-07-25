@@ -6,7 +6,9 @@ import { AddReleaseModal } from '../components/AddReleaseModal'
 
 interface HomePageProps {
   releases: Release[]
-  onAddRelease: (release: Release) => void
+  loading: boolean
+  userId: string
+  onAddRelease: (release: Release) => Promise<void>
 }
 
 type ViewMode = 'releases' | 'movies'
@@ -20,20 +22,8 @@ function buildMovieGroups(releases: Release[]): MovieGroup[] {
 
   for (const release of releases) {
     if (release.films.length === 0) {
-      // No linked films — fall back to a title-keyed group
-      const key = `title-${release.title}`
-      if (map.has(key)) {
-        map.get(key)!.releases.push(release)
-      } else {
-        map.set(key, {
-          key,
-          tmdbId: null,
-          title: release.title,
-          posterPath: null,
-          genres: [],
-          releases: [release],
-        })
-      }
+      // No linked films — skip in Movies view (still shown in Releases view)
+      continue
     } else {
       // Create (or contribute to) a group for every film in this release
       for (const film of release.films) {
@@ -71,7 +61,7 @@ function buildMovieGroups(releases: Release[]): MovieGroup[] {
   })
 }
 
-export function HomePage({ releases, onAddRelease }: HomePageProps) {
+export function HomePage({ releases, loading, userId, onAddRelease }: HomePageProps) {
   const [showModal, setShowModal] = useState(false)
   const [filterLabel, setFilterLabel] = useState('')
   const [filterFormat, setFilterFormat] = useState('')
@@ -139,6 +129,24 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
     }
     return `${releases.length} ${releases.length === 1 ? 'release' : 'releases'}`
   }, [releases, filteredReleases, allMovieGroups, movieGroups, viewMode, hasActiveFilter])
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <div className="h-5 w-32 animate-pulse rounded-md bg-surface-overlay" />
+            <div className="mt-1.5 h-4 w-20 animate-pulse rounded-md bg-surface-overlay" />
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-surface-overlay" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -295,6 +303,7 @@ export function HomePage({ releases, onAddRelease }: HomePageProps) {
 
       {showModal && (
         <AddReleaseModal
+          userId={userId}
           onSave={(release) => {
             onAddRelease(release)
             setShowModal(false)

@@ -1,3 +1,31 @@
+export const SPECIAL_FEATURE_CATEGORIES = [
+  'Audio Commentary',
+  'Featurette',
+  'Interview',
+  'Documentary',
+  'Short Film',
+  'Deleted Scenes',
+  'Outtakes / Bloopers',
+  'Trailer',
+  'Teaser',
+  'TV Spot',
+  'Image Gallery',
+  'Music Video',
+  'Essay / Video Essay',
+  'Introduction',
+  'Q&A',
+  'Other',
+] as const
+
+export type SpecialFeatureCategory = (typeof SPECIAL_FEATURE_CATEGORIES)[number]
+
+export interface SpecialFeature {
+  id: string
+  name: string
+  category?: SpecialFeatureCategory | ''
+  disc?: number | ''
+}
+
 export const GENRE_OPTIONS = [
   'Action',
   'Adventure',
@@ -86,6 +114,7 @@ export interface Release {
   notes: string
   coverUrl: string // base64 data URL or external image URL
   films: LinkedFilm[]
+  specialFeatures: SpecialFeature[]
   addedAt: string
 }
 

@@ -54,16 +54,16 @@ export function CollectionGrid({
               className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-surface-raised transition hover:border-accent/60 hover:shadow-lg hover:shadow-accent/5"
             >
               {/* Cover */}
-              <div className="aspect-[2/3] overflow-hidden bg-surface-overlay">
+              <div className="aspect-[5/6] overflow-hidden">
                 {coverSrc ? (
                   <img
                     src={coverSrc}
                     alt={`${release.title} cover`}
-                    className="h-full w-full object-cover transition group-hover:scale-105"
+                    className="h-full w-full object-contain transition group-hover:scale-105"
                     loading="lazy"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted">
+                  <div className="flex h-full items-center justify-center px-3 text-center text-xs text-muted bg-surface-overlay">
                     No cover
                   </div>
                 )}
