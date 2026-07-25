@@ -1,11 +1,8 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import type { SpecialFeature, SpecialFeatureCategory } from '../types'
 import { SPECIAL_FEATURE_CATEGORIES } from '../types'
 
 // ── Heuristic parser ─────────────────────────────────────────────────────────
-// Tries to find the "Special Features" block in raw OCR text and returns
-// candidate feature lines. Lines outside a detected block are still surfaced
-// but marked as less-likely to reduce checkbox noise.
 
 interface Candidate {
   id: string
@@ -57,8 +54,26 @@ function guessCategory(text: string): SpecialFeatureCategory | '' {
   return ''
 }
 
+/**
+ * Expand a single OCR line into multiple items when inline bullet/separator
+ * characters are present. Box backs commonly list features in a run-on
+ * paragraph like: "Commentary • Interview with director • Trailer"
+ */
+function expandInlineBullets(line: string): string[] {
+  // Split on: bullet chars, or " | " or " / " used as separators
+  // Use a lookahead/lookbehind to avoid splitting on hyphens inside words
+  return line
+    .split(/\s*[•·\u2022\u2023\u25E6\u2043\u2219]\s*|\s{1,2}[|]\s{1,2}|\s{2,}\/\s{2,}/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
 function parseOcrText(raw: string): Candidate[] {
-  const lines = raw.split('\n')
+  // First split on newlines, then expand inline bullets within each line
+  const lines = raw
+    .split('\n')
+    .flatMap((line) => expandInlineBullets(line))
+
   const FEATURE_HEADER =
     /special\s+features?|bonus\s+(features?|content|material)|extras?|supplements?/i
 
@@ -101,9 +116,190 @@ function parseOcrText(raw: string): Candidate[] {
   return candidates
 }
 
+// ── Crop canvas ───────────────────────────────────────────────────────────────
+
+interface CropRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+interface CropCanvasProps {
+  imageSrc: string
+  onConfirm: (rect: CropRect, naturalW: number, naturalH: number) => void
+  onSkip: () => void
+}
+
+function CropCanvas({ imageSrc, onConfirm, onSkip }: CropCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  // rect stored in *canvas* coordinates
+  const rectRef = useRef<CropRect | null>(null)
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null)
+  const [, forceRender] = useState(0)
+
+  // Draw image + overlay + selection rectangle
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current
+    const img = imgRef.current
+    if (!canvas || !img) return
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+    const rect = rectRef.current
+    if (rect && rect.w !== 0 && rect.h !== 0) {
+      const x = rect.w < 0 ? rect.x + rect.w : rect.x
+      const y = rect.h < 0 ? rect.y + rect.h : rect.y
+      const w = Math.abs(rect.w)
+      const h = Math.abs(rect.h)
+
+      // Dim everything outside the selection
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.clearRect(x, y, w, h)
+      ctx.drawImage(img, x, y, w, h, x, y, w, h)
+
+      // Selection border
+      ctx.strokeStyle = '#6366f1'
+      ctx.lineWidth = 2
+      ctx.setLineDash([])
+      ctx.strokeRect(x, y, w, h)
+
+      // Corner handles
+      const hs = 8
+      ctx.fillStyle = '#6366f1'
+      ;[[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([cx, cy]) => {
+        ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs)
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const img = new Image()
+    img.onload = () => {
+      imgRef.current = img
+      // Scale canvas to fit container width, maintain aspect ratio
+      const maxW = canvas.parentElement?.clientWidth ?? 600
+      const scale = Math.min(1, maxW / img.naturalWidth)
+      canvas.width = Math.round(img.naturalWidth * scale)
+      canvas.height = Math.round(img.naturalHeight * scale)
+      draw()
+    }
+    img.src = imageSrc
+  }, [imageSrc, draw])
+
+  function getCanvasPos(e: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    }
+  }
+
+  function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const pos = getCanvasPos(e)
+    dragStartRef.current = pos
+    rectRef.current = { x: pos.x, y: pos.y, w: 0, h: 0 }
+    draw()
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!dragStartRef.current) return
+    const pos = getCanvasPos(e)
+    rectRef.current = {
+      x: dragStartRef.current.x,
+      y: dragStartRef.current.y,
+      w: pos.x - dragStartRef.current.x,
+      h: pos.y - dragStartRef.current.y,
+    }
+    draw()
+  }
+
+  function onPointerUp() {
+    dragStartRef.current = null
+    forceRender((n) => n + 1) // trigger re-render to enable/disable Confirm button
+  }
+
+  function handleConfirm() {
+    const canvas = canvasRef.current
+    const img = imgRef.current
+    const rect = rectRef.current
+    if (!canvas || !img || !rect) return
+
+    // Normalize negative widths/heights
+    const x = rect.w < 0 ? rect.x + rect.w : rect.x
+    const y = rect.h < 0 ? rect.y + rect.h : rect.y
+    const w = Math.abs(rect.w)
+    const h = Math.abs(rect.h)
+    if (w < 10 || h < 10) return
+
+    // Convert canvas coords back to natural image coords
+    const scaleX = img.naturalWidth / canvas.width
+    const scaleY = img.naturalHeight / canvas.height
+    onConfirm(
+      {
+        x: x * scaleX,
+        y: y * scaleY,
+        w: w * scaleX,
+        h: h * scaleY,
+      },
+      img.naturalWidth,
+      img.naturalHeight,
+    )
+  }
+
+  const hasSelection = (() => {
+    const r = rectRef.current
+    return r !== null && Math.abs(r.w) >= 10 && Math.abs(r.h) >= 10
+  })()
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted">
+        Drag to select only the <span className="text-white">Special Features</span> section of the box,
+        then tap <span className="text-accent font-medium">Crop &amp; Scan</span>. Or skip to scan the whole image.
+      </p>
+      <div className="overflow-hidden rounded-xl border border-border bg-black">
+        <canvas
+          ref={canvasRef}
+          className="block w-full cursor-crosshair touch-none"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="flex-1 rounded-lg border border-border px-4 py-2 text-sm text-muted transition hover:bg-surface-overlay hover:text-white"
+        >
+          Skip — Scan Full Image
+        </button>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={!hasSelection}
+          className="flex-1 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Crop &amp; Scan
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type Stage = 'idle' | 'processing' | 'review'
+type Stage = 'idle' | 'crop' | 'processing' | 'review'
 
 interface BoxBackScannerProps {
   onSave: (features: SpecialFeature[]) => void
@@ -116,6 +312,8 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
   const [progressStatus, setProgressStatus] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [previewSrc, setPreviewSrc] = useState<string | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [isDragging, setIsDragging] = useState(false)
 
@@ -129,23 +327,12 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
   // ── OCR ────────────────────────────────────────────────────────────────────
 
   async function runOcr(file: File) {
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file.')
-      return
-    }
-
-    // Build a preview data URL
-    const reader = new FileReader()
-    reader.onload = (e) => setPreviewSrc(e.target?.result as string)
-    reader.readAsDataURL(file)
-
     setStage('processing')
     setProgress(0)
     setProgressStatus('Loading OCR engine…')
     setError(null)
 
     try {
-      // Lazy-load tesseract to avoid bloating the initial bundle
       const { createWorker } = await import('tesseract.js')
       const worker = await createWorker('eng', 1, {
         logger: (m: { status: string; progress: number }) => {
@@ -172,7 +359,15 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
   // ── File / drop handlers ────────────────────────────────────────────────────
 
   function handleFileSelect(file: File) {
-    runOcr(file)
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file.')
+      return
+    }
+    // Show crop stage first
+    const url = URL.createObjectURL(file)
+    setCropSrc(url)
+    setPendingFile(file)
+    setStage('crop')
   }
 
   function handleDrop(e: React.DragEvent) {
@@ -180,6 +375,47 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
     setIsDragging(false)
     const file = e.dataTransfer.files[0]
     if (file) handleFileSelect(file)
+  }
+
+  // ── Crop handlers ───────────────────────────────────────────────────────────
+
+  function handleCropConfirm(rect: CropRect, naturalW: number, naturalH: number) {
+    if (!cropSrc) return
+
+    // Draw the cropped region to a new canvas and convert to a File
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(rect.w)
+      canvas.height = Math.round(rect.h)
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h)
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            // Fallback to full image
+            if (pendingFile) runOcr(pendingFile)
+            return
+          }
+          const croppedFile = new File([blob], 'crop.jpg', { type: 'image/jpeg' })
+          // Update preview to show the cropped area
+          setPreviewSrc(URL.createObjectURL(blob))
+          runOcr(croppedFile)
+        },
+        'image/jpeg',
+        0.92,
+      )
+    }
+    img.src = cropSrc
+    // Suppress unused warning — naturalW/H used for reference only
+    void naturalW
+    void naturalH
+  }
+
+  function handleCropSkip() {
+    if (!pendingFile || !cropSrc) return
+    setPreviewSrc(cropSrc)
+    runOcr(pendingFile)
   }
 
   // ── Candidate editing ───────────────────────────────────────────────────────
@@ -256,6 +492,7 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
             <h2 className="text-base font-semibold text-white">Scan Box Back</h2>
             <p className="mt-0.5 text-xs text-muted">
               {stage === 'idle' && 'Upload or photograph the back of the box to extract special features.'}
+              {stage === 'crop' && 'Drag to select the Special Features section, then crop & scan.'}
               {stage === 'processing' && 'Reading text from your image…'}
               {stage === 'review' && 'Review the detected features below, then click "Add Features".'}
             </p>
@@ -357,6 +594,15 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
             </div>
           )}
 
+          {/* ── Stage: crop ── */}
+          {stage === 'crop' && cropSrc && (
+            <CropCanvas
+              imageSrc={cropSrc}
+              onConfirm={handleCropConfirm}
+              onSkip={handleCropSkip}
+            />
+          )}
+
           {/* ── Stage: processing ── */}
           {stage === 'processing' && (
             <div className="space-y-5">
@@ -407,7 +653,13 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                     </p>
                     <button
                       type="button"
-                      onClick={() => { setStage('idle'); setCandidates([]); setPreviewSrc(null) }}
+                      onClick={() => {
+                        setStage('idle')
+                        setCandidates([])
+                        setPreviewSrc(null)
+                        setCropSrc(null)
+                        setPendingFile(null)
+                      }}
                       className="mt-2 text-xs text-muted underline transition hover:text-white"
                     >
                       ← Try a different image
