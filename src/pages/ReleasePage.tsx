@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type {
-  Format,
-  Genre,
   LinkedFilm,
   Movie,
   MovieDetails,
@@ -11,9 +9,10 @@ import type {
   SpecialFeatureCategory,
   WatchProviderData,
 } from '../types'
-import { FORMAT_OPTIONS, GENRE_OPTIONS, LABEL_OPTIONS, SPECIAL_FEATURE_CATEGORIES } from '../types'
+import { LABEL_OPTIONS, SPECIAL_FEATURE_CATEGORIES } from '../types'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { BoxBackScanner } from '../components/BoxBackScanner'
+import { LinkedFilmEditor } from '../components/LinkedFilmEditor'
 import {
   formatRuntime,
   getMovieDetails,
@@ -44,10 +43,6 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     Record<number, WatchProviderData | null>
   >({})
   const fetchedFilmIds = useRef<Set<number>>(new Set())
-
-  // ── Genre panel + tag input state ───────────────────────
-  const [openGenrePanel, setOpenGenrePanel] = useState<number | null>(null)
-  const [tagInputs, setTagInputs] = useState<Record<number, string>>({})
 
   // ── Add-film search state ────────────────────────────────
   const [showFilmSearch, setShowFilmSearch] = useState(false)
@@ -122,54 +117,11 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     })
   }
 
-  function updateFilmFormat(tmdbId: number, fmt: Format | '') {
+  /** Called by LinkedFilmEditor when the user saves a film card. */
+  function handleFilmSave(updated: LinkedFilm) {
     if (!release) return
     onUpdate(release.id, {
-      films: release.films.map((f) =>
-        f.tmdbId === tmdbId ? { ...f, format: fmt } : f,
-      ),
-    })
-  }
-
-  function toggleFilmGenre(tmdbId: number, genre: Genre) {
-    if (!release) return
-    onUpdate(release.id, {
-      films: release.films.map((f) => {
-        if (f.tmdbId !== tmdbId) return f
-        const current = f.genres ?? []
-        return {
-          ...f,
-          genres: current.includes(genre)
-            ? current.filter((g) => g !== genre)
-            : [...current, genre],
-        }
-      }),
-    })
-  }
-
-  function addFilmTag(tmdbId: number, raw: string) {
-    if (!release) return
-    const tag = raw.trim().toLowerCase()
-    if (!tag) return
-    onUpdate(release.id, {
-      films: release.films.map((f) => {
-        if (f.tmdbId !== tmdbId) return f
-        const current = f.tags ?? []
-        if (current.includes(tag)) return f
-        return { ...f, tags: [...current, tag] }
-      }),
-    })
-    setTagInputs((prev) => ({ ...prev, [tmdbId]: '' }))
-  }
-
-  function removeFilmTag(tmdbId: number, tag: string) {
-    if (!release) return
-    onUpdate(release.id, {
-      films: release.films.map((f) =>
-        f.tmdbId === tmdbId
-          ? { ...f, tags: (f.tags ?? []).filter((t) => t !== tag) }
-          : f,
-      ),
+      films: release.films.map((f) => (f.tmdbId === updated.tmdbId ? updated : f)),
     })
   }
 
@@ -442,8 +394,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                   ]
                     .filter(
                       (p, i, a) =>
-                        a.findIndex((q) => q.provider_id === p.provider_id) ===
-                        i,
+                        a.findIndex((q) => q.provider_id === p.provider_id) === i,
                     )
                     .sort((a, b) => a.display_priority - b.display_priority)
                     .slice(0, 6)
@@ -454,8 +405,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                   ]
                     .filter(
                       (p, i, a) =>
-                        a.findIndex((q) => q.provider_id === p.provider_id) ===
-                        i,
+                        a.findIndex((q) => q.provider_id === p.provider_id) === i,
                     )
                     .sort((a, b) => a.display_priority - b.display_priority)
                     .slice(0, 6)
@@ -463,22 +413,10 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                   return (
                     <div
                       key={film.tmdbId}
-                      className="relative rounded-xl border border-border bg-surface-raised p-4"
+                      className="rounded-xl border border-border bg-surface-raised p-4"
                     >
-                      {/* Remove button */}
-                      <button
-                        type="button"
-                        onClick={() => removeFilmFromRelease(film.tmdbId)}
-                        className="absolute right-3 top-3 rounded-full p-1 text-muted transition hover:bg-surface-overlay hover:text-white"
-                        aria-label={`Remove ${film.title}`}
-                      >
-                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                        </svg>
-                      </button>
-
+                      {/* ── TMDB display ── */}
                       <div className="flex gap-4">
-                        {/* Poster */}
                         <div className="flex-shrink-0">
                           <div className="h-24 w-16 overflow-hidden rounded-lg border border-border bg-surface-overlay">
                             {posterUrl ? (
@@ -493,26 +431,9 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                           </div>
                         </div>
 
-                        {/* Film info */}
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-white">{film.title}</p>
                           <p className="text-xs text-muted">{film.year}</p>
-
-                          {/* Per-film format selector */}
-                          <select
-                            value={film.format ?? ''}
-                            onChange={(e) =>
-                              updateFilmFormat(film.tmdbId, e.target.value as Format | '')
-                            }
-                            className="mt-1.5 rounded-md border border-border bg-surface-overlay px-2 py-1 text-xs text-white outline-none focus:border-accent"
-                          >
-                            <option value="">Set format…</option>
-                            {FORMAT_OPTIONS.map((f) => (
-                              <option key={f} value={f}>
-                                {f}
-                              </option>
-                            ))}
-                          </select>
 
                           {details && (
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
@@ -525,7 +446,6 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                             </div>
                           )}
 
-                          {/* Watch providers */}
                           {film.tmdbId in filmProviders &&
                             (streamingProviders.length > 0 ||
                               purchaseProviders.length > 0) && (
@@ -571,112 +491,17 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                         </div>
                       </div>
 
-                      {/* ── Genres + Tags ── */}
-                      {(() => {
-                        const selectedGenres = film.genres ?? []
-                        const filmTags = film.tags ?? []
-                        const genrePanelOpen = openGenrePanel === film.tmdbId
-                        return (
-                          <div className="mt-3 border-t border-border pt-3 space-y-2">
-                            {/* Genre picker */}
-                            <div>
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setOpenGenrePanel(genrePanelOpen ? null : film.tmdbId)
-                                  }
-                                  className={`rounded-md border px-2 py-0.5 text-[11px] transition ${
-                                    genrePanelOpen
-                                      ? 'border-accent bg-accent/10 text-accent'
-                                      : 'border-border text-muted hover:border-accent/50 hover:text-white'
-                                  }`}
-                                >
-                                  {selectedGenres.length === 0
-                                    ? '+ Genres'
-                                    : `Genres (${selectedGenres.length})`}
-                                </button>
-                                {selectedGenres.map((g) => (
-                                  <span
-                                    key={g}
-                                    className="flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent-hover"
-                                  >
-                                    {g}
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleFilmGenre(film.tmdbId, g)}
-                                      className="ml-0.5 text-accent-hover/60 hover:text-accent-hover"
-                                      aria-label={`Remove ${g}`}
-                                    >
-                                      ×
-                                    </button>
-                                  </span>
-                                ))}
-                              </div>
-                              {genrePanelOpen && (
-                                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-border bg-surface p-3 sm:grid-cols-3">
-                                  {GENRE_OPTIONS.map((g) => (
-                                    <label
-                                      key={g}
-                                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-surface-overlay"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedGenres.includes(g)}
-                                        onChange={() => toggleFilmGenre(film.tmdbId, g)}
-                                        className="accent-accent h-3.5 w-3.5 flex-shrink-0"
-                                      />
-                                      <span className="text-[11px] text-white">{g}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            {/* Tags */}
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {filmTags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted"
-                                >
-                                  {tag}
-                                  <button
-                                    type="button"
-                                    onClick={() => removeFilmTag(film.tmdbId, tag)}
-                                    className="hover:text-white"
-                                    aria-label={`Remove tag ${tag}`}
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              ))}
-                              <input
-                                type="text"
-                                value={tagInputs[film.tmdbId] ?? ''}
-                                onChange={(e) =>
-                                  setTagInputs((prev) => ({
-                                    ...prev,
-                                    [film.tmdbId]: e.target.value,
-                                  }))
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ',') {
-                                    e.preventDefault()
-                                    addFilmTag(film.tmdbId, tagInputs[film.tmdbId] ?? '')
-                                  }
-                                }}
-                                onBlur={() =>
-                                  addFilmTag(film.tmdbId, tagInputs[film.tmdbId] ?? '')
-                                }
-                                placeholder="Add tag, press Enter…"
-                                className="min-w-[140px] flex-1 rounded-md border border-border bg-transparent px-2 py-0.5 text-[11px] text-white placeholder-muted/40 outline-none focus:border-accent"
-                              />
-                            </div>
-                          </div>
-                        )
-                      })()}
+                      {/* ── Editable fields (format · genres · tags · save) ── */}
+                      <div className="mt-3 border-t border-border pt-3">
+                        <LinkedFilmEditor
+                          film={film}
+                          showFilmHeader={false}
+                          onSave={handleFilmSave}
+                          onRemove={() => removeFilmFromRelease(film.tmdbId)}
+                        />
+                      </div>
 
-                      {/* Crew / Cast */}
+                      {/* ── Crew / Cast ── */}
                       {details &&
                         (details.topCrew.length > 0 ||
                           details.topCast.length > 0) && (
