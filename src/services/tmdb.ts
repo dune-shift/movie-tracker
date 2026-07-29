@@ -1,8 +1,8 @@
 import type {
-  Movie,
-  MovieCastMember,
-  MovieCrewMember,
-  MovieDetails,
+  Film,
+  FilmCastMember,
+  FilmCrewMember,
+  FilmDetails,
   WatchProvider,
   WatchProviderData,
 } from '../types'
@@ -22,7 +22,7 @@ const TOP_CREW_JOBS = [
 ] as const
 
 interface TmdbSearchResponse {
-  results: Movie[]
+  results: Film[]
 }
 
 interface TmdbCredits {
@@ -43,7 +43,7 @@ interface TmdbWatchProvidersResponse {
   }
 }
 
-interface TmdbMovieDetailsResponse {
+interface TmdbFilmDetailsResponse {
   id: number
   title: string
   release_date: string
@@ -105,9 +105,9 @@ function getDirector(crew: TmdbCredits['crew']): string | null {
   return crew.find((member) => member.job === 'Director')?.name ?? null
 }
 
-function getTopCrew(crew: TmdbCredits['crew']): MovieCrewMember[] {
+function getTopCrew(crew: TmdbCredits['crew']): FilmCrewMember[] {
   const seen = new Set<string>()
-  const topCrew: MovieCrewMember[] = []
+  const topCrew: FilmCrewMember[] = []
 
   for (const job of TOP_CREW_JOBS) {
     const member = crew.find((person) => person.job === job)
@@ -119,16 +119,29 @@ function getTopCrew(crew: TmdbCredits['crew']): MovieCrewMember[] {
   return topCrew
 }
 
-function getTopCast(cast: TmdbCredits['cast'], limit = 8): MovieCastMember[] {
+function getTopCast(cast: TmdbCredits['cast'], limit = 8): FilmCastMember[] {
   return [...cast]
     .sort((a, b) => a.order - b.order)
     .slice(0, limit)
     .map(({ name, character }) => ({ name, character }))
 }
 
-export async function searchMovies(query: string): Promise<Movie[]> {
+/**
+ * Strip leading articles ("the", "a", "an") so queries like
+ * "the Fantastic Mr. Fox" match the TMDB title "Fantastic Mr. Fox".
+ * TMDB's search is token-based and a leading article can prevent an
+ * otherwise-perfect match from surfacing in the top results.
+ */
+function normalizeQuery(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^(the|a|an)\s+/i, '')
+    .trim()
+}
+
+export async function searchFilms(query: string): Promise<Film[]> {
   const response = await tmdbFetch('/search/movie', {
-    query: query.trim(),
+    query: normalizeQuery(query),
     include_adult: 'false',
   })
 
@@ -157,7 +170,7 @@ export function getProviderLogoUrl(logoPath: string): string {
   return `https://image.tmdb.org/t/p/w45${logoPath}`
 }
 
-export async function getMovieDetails(id: number): Promise<MovieDetails> {
+export async function getFilmDetails(id: number): Promise<FilmDetails> {
   const response = await tmdbFetch(`/movie/${id}`, {
     append_to_response: 'credits',
   })
@@ -166,7 +179,7 @@ export async function getMovieDetails(id: number): Promise<MovieDetails> {
     throw new Error(`TMDB request failed (${response.status})`)
   }
 
-  const data: TmdbMovieDetailsResponse = await response.json()
+  const data: TmdbFilmDetailsResponse = await response.json()
 
   return {
     id: data.id,

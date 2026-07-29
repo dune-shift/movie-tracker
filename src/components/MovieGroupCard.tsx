@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Format, MovieGroup } from '../types'
+import type { Format, FilmGroup } from '../types'
 import { getPosterUrl } from '../services/tmdb'
 
-interface MovieGroupCardProps {
-  group: MovieGroup
+interface FilmGroupCardProps {
+  group: FilmGroup
 }
 
 // Shorten long format names to compact badge labels
@@ -15,10 +15,10 @@ function shortFormat(format: string): string {
   return format
 }
 
-export function MovieGroupCard({ group }: MovieGroupCardProps) {
+export function FilmGroupCard({ group }: FilmGroupCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  // In the Movies view, individual TMDB film posters take priority.
+  // In the Films view, individual TMDB film posters take priority.
   // Only fall back to the release's custom cover art if there's no TMDB poster.
   const coverSrc =
     (group.posterPath ? getPosterUrl(group.posterPath) : null) ||

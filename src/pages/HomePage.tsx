@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Genre, MovieGroup, Release } from '../types'
+import type { Genre, FilmGroup, Release } from '../types'
 import { FORMAT_OPTIONS, GENRE_OPTIONS } from '../types'
 import { CollectionGrid } from '../components/CollectionGrid'
 import { AddReleaseModal } from '../components/AddReleaseModal'
@@ -11,18 +11,18 @@ interface HomePageProps {
   onAddRelease: (release: Release) => Promise<void>
 }
 
-type ViewMode = 'releases' | 'movies'
+type ViewMode = 'releases' | 'films'
 
-// Build a de-duplicated list of MovieGroups from a flat releases array.
-// Each linked film in a release gets its own MovieGroup entry. Releases that
+// Build a de-duplicated list of FilmGroups from a flat releases array.
+// Each linked film in a release gets its own FilmGroup entry. Releases that
 // share the same film (same tmdbId) collapse into one group with multiple
 // copies. Releases with no linked films fall back to a title-keyed group.
-function buildMovieGroups(releases: Release[]): MovieGroup[] {
-  const map = new Map<string, MovieGroup>()
+function buildFilmGroups(releases: Release[]): FilmGroup[] {
+  const map = new Map<string, FilmGroup>()
 
   for (const release of releases) {
     if (release.films.length === 0) {
-      // No linked films — skip in Movies view (still shown in Releases view)
+      // No linked films — skip in Films view (still shown in Releases view)
       continue
     } else {
       // Create (or contribute to) a group for every film in this release
@@ -101,13 +101,13 @@ export function HomePage({ releases, loading, userId, onAddRelease }: HomePagePr
 
   // Groups for the full (unfiltered) collection — used for the total count.
   // Memoised separately so countLabel doesn't trigger a second full traversal.
-  const allMovieGroups = useMemo(
-    () => buildMovieGroups(releases),
+  const allFilmGroups = useMemo(
+    () => buildFilmGroups(releases),
     [releases],
   )
 
-  const movieGroups = useMemo(
-    () => buildMovieGroups(filteredReleases),
+  const filmGroups = useMemo(
+    () => buildFilmGroups(filteredReleases),
     [filteredReleases],
   )
 
@@ -116,9 +116,9 @@ export function HomePage({ releases, loading, userId, onAddRelease }: HomePagePr
   // Count label for the subtitle — varies by view mode
   const countLabel = useMemo(() => {
     if (releases.length === 0) return 'No releases yet'
-    if (viewMode === 'movies') {
-      const total = allMovieGroups.length
-      const shown = movieGroups.length
+    if (viewMode === 'films') {
+      const total = allFilmGroups.length
+      const shown = filmGroups.length
       if (hasActiveFilter) {
         return `${shown} of ${total} ${total === 1 ? 'film' : 'films'}`
       }
@@ -128,7 +128,7 @@ export function HomePage({ releases, loading, userId, onAddRelease }: HomePagePr
       return `${filteredReleases.length} of ${releases.length} ${releases.length === 1 ? 'release' : 'releases'}`
     }
     return `${releases.length} ${releases.length === 1 ? 'release' : 'releases'}`
-  }, [releases, filteredReleases, allMovieGroups, movieGroups, viewMode, hasActiveFilter])
+  }, [releases, filteredReleases, allFilmGroups, filmGroups, viewMode, hasActiveFilter])
 
   if (loading) {
     return (
@@ -173,14 +173,14 @@ export function HomePage({ releases, loading, userId, onAddRelease }: HomePagePr
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('movies')}
+                onClick={() => setViewMode('films')}
                 className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                  viewMode === 'movies'
+                  viewMode === 'films'
                     ? 'bg-accent text-white'
                     : 'text-muted hover:text-white'
                 }`}
               >
-                Movies
+                Films
               </button>
             </div>
           )}
@@ -298,7 +298,7 @@ export function HomePage({ releases, loading, userId, onAddRelease }: HomePagePr
       <CollectionGrid
         releases={filteredReleases}
         viewMode={viewMode}
-        movieGroups={movieGroups}
+        filmGroups={filmGroups}
       />
 
       {showModal && (

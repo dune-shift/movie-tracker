@@ -121,7 +121,7 @@ export interface Release {
 // ── Derived / computed types ────────────────────────────────
 
 // One film with all the physical releases that contain it
-export interface MovieGroup {
+export interface FilmGroup {
   key: string             // tmdbId as string, or title-slug for unlinked releases
   tmdbId: number | null
   title: string
@@ -148,30 +148,30 @@ export interface WatchProviderData {
   link?: string
 }
 
-export interface Movie {
+export interface Film {
   id: number
   title: string
   release_date: string
   poster_path: string | null
 }
 
-export interface MovieCastMember {
+export interface FilmCastMember {
   name: string
   character: string
 }
 
-export interface MovieCrewMember {
+export interface FilmCrewMember {
   name: string
   job: string
 }
 
-export interface MovieDetails {
+export interface FilmDetails {
   id: number
   title: string
   release_date: string
   poster_path: string | null
   runtime: number | null
   director: string | null
-  topCrew: MovieCrewMember[]
-  topCast: MovieCastMember[]
+  topCrew: FilmCrewMember[]
+  topCast: FilmCastMember[]
 }

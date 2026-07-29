@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Format, Genre, LinkedFilm } from '../types'
 import { FORMAT_OPTIONS, GENRE_OPTIONS } from '../types'
 import { getPosterUrl } from '../services/tmdb'
 
 interface LinkedFilmEditorProps {
   film: LinkedFilm
-  /** Called when the user clicks "Save" on this film card. */
+  /** Called when the user saves (or, in autoSave mode, on every change). */
   onSave: (updated: LinkedFilm) => void
   /** If provided, a Remove button is shown. */
   onRemove?: () => void
@@ -15,6 +15,12 @@ interface LinkedFilmEditorProps {
    * Defaults to true.
    */
   showFilmHeader?: boolean
+  /**
+   * When true, every change is written through to onSave immediately and
+   * the explicit Save button is hidden. Use on edit pages where the rest
+   * of the UI already auto-saves on every change.
+   */
+  autoSave?: boolean
 }
 
 /**
@@ -26,15 +32,31 @@ interface LinkedFilmEditorProps {
  * everything at the end) or on the Release detail page (where saving writes
  * directly to the database).
  */
-export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true }: LinkedFilmEditorProps) {
+export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true, autoSave = false }: LinkedFilmEditorProps) {
   const [draft, setDraft] = useState<LinkedFilm>(film)
   const [isDirty, setIsDirty] = useState(false)
   const [genrePanelOpen, setGenrePanelOpen] = useState(false)
   const [tagInput, setTagInput] = useState('')
 
+  // Keep draft in sync with the film prop whenever the parent updates it
+  // (e.g. after a save propagates through the DB), but only when there are
+  // no unsaved local changes so we don't clobber an in-progress edit.
+  useEffect(() => {
+    if (!isDirty) {
+      setDraft(film)
+    }
+  }, [film, isDirty])
+
   function update(partial: Partial<LinkedFilm>) {
-    setDraft((prev) => ({ ...prev, ...partial }))
-    setIsDirty(true)
+    const newDraft = { ...draft, ...partial }
+    setDraft(newDraft)
+    if (autoSave) {
+      onSave(newDraft)
+      // Don't mark dirty — the prop will update from the parent and the
+      // useEffect sync guard won't block it since isDirty stays false.
+    } else {
+      setIsDirty(true)
+    }
   }
 
   function toggleGenre(genre: Genre) {
@@ -62,6 +84,7 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
   function handleSave() {
     onSave(draft)
     setIsDirty(false)
+    setGenrePanelOpen(false)
   }
 
   const posterUrl = getPosterUrl(draft.posterPath ?? null)

@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
-import type { Release, LinkedFilm, Movie } from '../types'
+import type { Release, LinkedFilm, Film } from '../types'
 import { LABEL_OPTIONS } from '../types'
-import { getPosterUrl, getReleaseYear, searchMovies } from '../services/tmdb'
+import { getPosterUrl, getReleaseYear, searchFilms } from '../services/tmdb'
 import { uploadCoverImage } from '../services/storage'
 import { BarcodeScanner } from './BarcodeScanner'
 import { LinkedFilmEditor } from './LinkedFilmEditor'
@@ -33,7 +33,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
   // ── Step 2 fields ────────────────────────────────────────
   const [films, setFilms] = useState<LinkedFilm[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<Movie[]>([])
+  const [searchResults, setSearchResults] = useState<Film[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -124,7 +124,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
     setIsSearching(true)
     setSearchError(null)
     try {
-      const results = await searchMovies(q)
+      const results = await searchFilms(q)
       setSearchResults(results.slice(0, 10))
     } catch {
       setSearchError('Search failed. Check your API key.')
@@ -134,20 +134,22 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
     }
   }
 
-  function addFilm(movie: Movie) {
-    if (filmIds.has(movie.id)) return
+  function addFilm(film: Film) {
+    if (filmIds.has(film.id)) return
     setFilms((prev) => [
       ...prev,
       {
-        tmdbId: movie.id,
-        title: movie.title,
-        year: getReleaseYear(movie.release_date),
-        posterPath: movie.poster_path,
+        tmdbId: film.id,
+        title: film.title,
+        year: getReleaseYear(film.release_date),
+        posterPath: film.poster_path,
         format: '',
         genres: [],
         tags: [],
       },
     ])
+    setSearchQuery('')
+    setSearchResults([])
   }
 
   function removeFilm(tmdbId: number) {
@@ -501,14 +503,14 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
             {/* Search results */}
             {searchResults.length > 0 && (
               <ul className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
-                {searchResults.map((movie) => {
-                  const added = filmIds.has(movie.id)
-                  const posterUrl = getPosterUrl(movie.poster_path)
+                {searchResults.map((film) => {
+                  const added = filmIds.has(film.id)
+                  const posterUrl = getPosterUrl(film.poster_path)
                   return (
-                    <li key={movie.id} className="border-b border-border last:border-0">
+                    <li key={film.id} className="border-b border-border last:border-0">
                       <button
                         type="button"
-                        onClick={() => addFilm(movie)}
+                        onClick={() => addFilm(film)}
                         disabled={added}
                         className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised disabled:opacity-50"
                       >
@@ -525,10 +527,10 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-white">
-                            {movie.title}
+                            {film.title}
                           </p>
                           <p className="text-xs text-muted">
-                            {getReleaseYear(movie.release_date)}
+                            {getReleaseYear(film.release_date)}
                           </p>
                         </div>
                         <span

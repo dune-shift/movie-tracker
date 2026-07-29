@@ -95,7 +95,7 @@ function App() {
                 Kinobin
               </h1>
               <p className="mt-2 text-sm text-muted">
-                Your personal physical media collection.
+                Physical media collecting for cinema obsessives.
               </p>
             </div>
 

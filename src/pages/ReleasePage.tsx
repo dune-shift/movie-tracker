@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type {
   LinkedFilm,
-  Movie,
-  MovieDetails,
+  Film,
+  FilmDetails,
   Release,
   SpecialFeature,
   SpecialFeatureCategory,
@@ -15,12 +15,12 @@ import { BoxBackScanner } from '../components/BoxBackScanner'
 import { LinkedFilmEditor } from '../components/LinkedFilmEditor'
 import {
   formatRuntime,
-  getMovieDetails,
+  getFilmDetails,
   getPosterUrl,
   getProviderLogoUrl,
   getReleaseYear,
   getWatchProviders,
-  searchMovies,
+  searchFilms,
 } from '../services/tmdb'
 
 interface ReleasePageProps {
@@ -36,7 +36,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
 
   const release = releases.find((r) => r.id === id)
 
-  const [filmDetails, setFilmDetails] = useState<Record<number, MovieDetails>>(
+  const [filmDetails, setFilmDetails] = useState<Record<number, FilmDetails>>(
     {},
   )
   const [filmProviders, setFilmProviders] = useState<
@@ -47,7 +47,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
   // ── Add-film search state ────────────────────────────────
   const [showFilmSearch, setShowFilmSearch] = useState(false)
   const [filmSearchQuery, setFilmSearchQuery] = useState('')
-  const [filmSearchResults, setFilmSearchResults] = useState<Movie[]>([])
+  const [filmSearchResults, setFilmSearchResults] = useState<Film[]>([])
   const [isFilmSearching, setIsFilmSearching] = useState(false)
   const [filmSearchError, setFilmSearchError] = useState<string | null>(null)
 
@@ -67,7 +67,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
       if (fetchedFilmIds.current.has(film.tmdbId)) continue
       fetchedFilmIds.current.add(film.tmdbId)
 
-      getMovieDetails(film.tmdbId)
+      getFilmDetails(film.tmdbId)
         .then((data) =>
           setFilmDetails((prev) => ({ ...prev, [film.tmdbId]: data })),
         )
@@ -87,7 +87,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     setIsFilmSearching(true)
     setFilmSearchError(null)
     try {
-      const results = await searchMovies(q)
+      const results = await searchFilms(q)
       setFilmSearchResults(results.slice(0, 10))
     } catch {
       setFilmSearchError('Search failed. Check your API key.')
@@ -97,17 +97,20 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     }
   }
 
-  function addFilmToRelease(movie: Movie) {
+  function addFilmToRelease(film: Film) {
     if (!release) return
-    if (release.films.some((f) => f.tmdbId === movie.id)) return
+    if (release.films.some((f) => f.tmdbId === film.id)) return
     const newFilm: LinkedFilm = {
-      tmdbId: movie.id,
-      title: movie.title,
-      year: getReleaseYear(movie.release_date),
-      posterPath: movie.poster_path,
+      tmdbId: film.id,
+      title: film.title,
+      year: getReleaseYear(film.release_date),
+      posterPath: film.poster_path,
       format: '',
     }
     onUpdate(release.id, { films: [...release.films, newFilm] })
+    setFilmSearchQuery('')
+    setFilmSearchResults([])
+    setShowFilmSearch(false)
   }
 
   function removeFilmFromRelease(tmdbId: number) {
@@ -325,19 +328,19 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
 
                 {filmSearchResults.length > 0 && (
                   <ul className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
-                    {filmSearchResults.map((movie) => {
+                    {filmSearchResults.map((film) => {
                       const alreadyAdded = release.films.some(
-                        (f) => f.tmdbId === movie.id,
+                        (f) => f.tmdbId === film.id,
                       )
-                      const posterUrl = getPosterUrl(movie.poster_path)
+                      const posterUrl = getPosterUrl(film.poster_path)
                       return (
                         <li
-                          key={movie.id}
+                          key={film.id}
                           className="border-b border-border last:border-0"
                         >
                           <button
                             type="button"
-                            onClick={() => addFilmToRelease(movie)}
+                            onClick={() => addFilmToRelease(film)}
                             disabled={alreadyAdded}
                             className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised disabled:opacity-50"
                           >
@@ -354,10 +357,10 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-white">
-                                {movie.title}
+                                {film.title}
                               </p>
                               <p className="text-xs text-muted">
-                                {getReleaseYear(movie.release_date)}
+                                {getReleaseYear(film.release_date)}
                               </p>
                             </div>
                             <span
@@ -496,6 +499,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                         <LinkedFilmEditor
                           film={film}
                           showFilmHeader={false}
+                          autoSave
                           onSave={handleFilmSave}
                           onRemove={() => removeFilmFromRelease(film.tmdbId)}
                         />

@@ -1,18 +1,18 @@
 import { Link } from 'react-router-dom'
-import type { Format, MovieGroup, Release } from '../types'
+import type { Format, FilmGroup, Release } from '../types'
 import { getPosterUrl } from '../services/tmdb'
-import { MovieGroupCard } from './MovieGroupCard'
+import { FilmGroupCard } from './MovieGroupCard'
 
 interface CollectionGridProps {
   releases: Release[]
-  viewMode: 'releases' | 'movies'
-  movieGroups: MovieGroup[]
+  viewMode: 'releases' | 'films'
+  filmGroups: FilmGroup[]
 }
 
 export function CollectionGrid({
   releases,
   viewMode,
-  movieGroups,
+  filmGroups,
 }: CollectionGridProps) {
   if (releases.length === 0) {
     return (
@@ -25,12 +25,12 @@ export function CollectionGrid({
     )
   }
 
-  // ── Movies view ──────────────────────────────────────────
-  if (viewMode === 'movies') {
+  // ── Films view ──────────────────────────────────────────
+  if (viewMode === 'films') {
     return (
       <ul className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-        {movieGroups.map((group) => (
-          <MovieGroupCard key={group.key} group={group} />
+        {filmGroups.map((group) => (
+          <FilmGroupCard key={group.key} group={group} />
         ))}
       </ul>
     )
