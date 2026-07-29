@@ -88,8 +88,8 @@ function cleanLine(line: string): string {
     .trim()
 }
 
-/** Guess category from a line's text. */
-function guessCategory(text: string): SpecialFeatureCategory | '' {
+/** Guess category from a line's text. Exported so other components can use it for live input prediction. */
+export function guessCategory(text: string): SpecialFeatureCategory | '' {
   const t = text.toLowerCase()
   if (/commentary|commentry/.test(t)) return 'Audio Commentary'
   if (/trailer/.test(t)) return 'Trailer'

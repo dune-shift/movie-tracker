@@ -508,12 +508,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                   const posterUrl = getPosterUrl(film.poster_path)
                   return (
                     <li key={film.id} className="border-b border-border last:border-0">
-                      <button
-                        type="button"
-                        onClick={() => addFilm(film)}
-                        disabled={added}
-                        className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised disabled:opacity-50"
-                      >
+                      <div className="flex w-full items-center gap-3 px-3 py-2">
                         <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
                           {posterUrl ? (
                             <img
@@ -533,12 +528,20 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                             {getReleaseYear(film.release_date)}
                           </p>
                         </div>
-                        <span
-                          className={`flex-shrink-0 text-xs ${added ? 'text-accent' : 'text-muted'}`}
-                        >
-                          {added ? '✓ Added' : '+ Add'}
-                        </span>
-                      </button>
+                        {added ? (
+                          <span className="flex-shrink-0 rounded-md bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
+                            ✓ Added
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => addFilm(film)}
+                            className="flex-shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-hover"
+                          >
+                            Add to Release
+                          </button>
+                        )}
+                      </div>
                     </li>
                   )
                 })}
@@ -566,6 +569,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                     <li key={film.tmdbId}>
                       <LinkedFilmEditor
                         film={film}
+                        autoSave
                         onSave={updateFilm}
                         onRemove={() => removeFilm(film.tmdbId)}
                       />

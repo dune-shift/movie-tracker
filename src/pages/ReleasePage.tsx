@@ -13,6 +13,7 @@ import { LABEL_OPTIONS, SPECIAL_FEATURE_CATEGORIES } from '../types'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { BoxBackScanner } from '../components/BoxBackScanner'
 import { LinkedFilmEditor } from '../components/LinkedFilmEditor'
+import { guessCategory } from '../services/ocrParser'
 import {
   formatRuntime,
   getFilmDetails,
@@ -338,12 +339,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                           key={film.id}
                           className="border-b border-border last:border-0"
                         >
-                          <button
-                            type="button"
-                            onClick={() => addFilmToRelease(film)}
-                            disabled={alreadyAdded}
-                            className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised disabled:opacity-50"
-                          >
+                          <div className="flex w-full items-center gap-3 px-3 py-2">
                             <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
                               {posterUrl ? (
                                 <img
@@ -363,12 +359,20 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                                 {getReleaseYear(film.release_date)}
                               </p>
                             </div>
-                            <span
-                              className={`flex-shrink-0 text-xs ${alreadyAdded ? 'text-accent' : 'text-muted'}`}
-                            >
-                              {alreadyAdded ? '✓ Added' : '+ Add'}
-                            </span>
-                          </button>
+                            {alreadyAdded ? (
+                              <span className="flex-shrink-0 rounded-md bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
+                                ✓ Added
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => addFilmToRelease(film)}
+                                className="flex-shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-hover"
+                              >
+                                Add to Release
+                              </button>
+                            )}
+                          </div>
                         </li>
                       )
                     })}
@@ -599,7 +603,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
                       </svg>
-                      Scan Box Back
+                      Import Features
                     </button>
                     <button
                       type="button"
@@ -618,7 +622,13 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                       type="text"
                       placeholder="Feature name…"
                       value={newFeatureName}
-                      onChange={(e) => setNewFeatureName(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setNewFeatureName(val)
+                        // Auto-detect category from name as the user types
+                        const detected = guessCategory(val)
+                        if (detected) setNewFeatureCategory(detected)
+                      }}
                       onKeyDown={(e) => e.key === 'Enter' && addSingleFeature()}
                       autoFocus
                       className="flex-1 min-w-[180px] rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
@@ -649,7 +659,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                 {/* Feature list */}
                 {features.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
-                    No special features logged yet. Use "Scan Box Back" to read them from a photo, or add them manually.
+                    No special features logged yet. Use "Import Features" to add a batch from a photo or pasted text, or "Add Feature" to add one at a time.
                   </div>
                 ) : (
                   <div className="space-y-3">

@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 import type { SpecialFeature, SpecialFeatureCategory } from '../types'
 import { SPECIAL_FEATURE_CATEGORIES } from '../types'
-import { type OcrCandidate, parseOcrText } from '../services/ocrParser'
+import { type OcrCandidate, parseOcrText, guessCategory } from '../services/ocrParser'
 
 // ── Crop canvas ───────────────────────────────────────────────────────────────
 
@@ -183,7 +183,7 @@ function CropCanvas({ imageSrc, onConfirm }: CropCanvasProps) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-type Stage = 'idle' | 'crop' | 'processing' | 'review'
+type Stage = 'idle' | 'paste' | 'crop' | 'processing' | 'review'
 
 interface BoxBackScannerProps {
   onSave: (features: SpecialFeature[]) => void
@@ -191,7 +191,7 @@ interface BoxBackScannerProps {
 }
 
 export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
-  const [stage, setStage] = useState<Stage>('idle')
+  const [stage, setStage] = useState<Stage>('paste')
   const [progress, setProgress] = useState(0)
   const [progressStatus, setProgressStatus] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -200,6 +200,10 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
   const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [candidates, setCandidates] = useState<OcrCandidate[]>([])
   const [isDragging, setIsDragging] = useState(false)
+
+  // Paste-text state
+  const [pasteText, setPasteText] = useState('')
+  const [reviewSource, setReviewSource] = useState<'image' | 'paste'>('image')
 
   // Manual-add row state
   const [manualName, setManualName] = useState('')
@@ -240,6 +244,18 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
     }
   }
 
+  // ── Paste-text handler ──────────────────────────────────────────────────────
+
+  function handleParsePaste() {
+    const text = pasteText.trim()
+    if (!text) return
+    const parsed = parseOcrText(text)
+    setCandidates(parsed)
+    setReviewSource('paste')
+    setPreviewSrc(null)
+    setStage('review')
+  }
+
   // ── File / drop handlers ────────────────────────────────────────────────────
 
   function handleFileSelect(file: File) {
@@ -251,6 +267,7 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
     const url = URL.createObjectURL(file)
     setCropSrc(url)
     setPendingFile(file)
+    setReviewSource('image')
     setStage('crop')
   }
 
@@ -367,9 +384,10 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-white">Scan Box Back</h2>
+            <h2 className="text-base font-semibold text-white">Import Features</h2>
             <p className="mt-0.5 text-xs text-muted">
               {stage === 'idle' && 'Upload or photograph the back of the box to extract special features.'}
+              {stage === 'paste' && 'Paste the special features description from the distributor or retailer listing.'}
               {stage === 'crop' && 'Drag to select the Special Features section, then crop & scan.'}
               {stage === 'processing' && 'Reading text from your image…'}
               {stage === 'review' && 'Review the detected features below, then click "Add Features".'}
@@ -420,7 +438,20 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                 </div>
               </button>
 
-              {/* Secondary: upload file — small & subtle */}
+              {/* Secondary: paste text */}
+              <button
+                type="button"
+                onClick={() => { setPasteText(''); setStage('paste') }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-xs text-muted transition hover:border-border/80 hover:text-white/70"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 flex-shrink-0">
+                  <path d="M5.5 13.5A1.5 1.5 0 017 12h6a1.5 1.5 0 011.5 1.5v1A1.5 1.5 0 0113 16H7a1.5 1.5 0 01-1.5-1.5v-1z" />
+                  <path fillRule="evenodd" d="M6.5 3A1.5 1.5 0 005 4.5v11A1.5 1.5 0 006.5 17h7A1.5 1.5 0 0015 15.5v-11A1.5 1.5 0 0013.5 3h-7zM6.5 4h7a.5.5 0 01.5.5v11a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-11a.5.5 0 01.5-.5z" clipRule="evenodd" />
+                </svg>
+                Paste features text instead
+              </button>
+
+              {/* Tertiary: upload file — small & subtle */}
               <div
                 role="button"
                 tabIndex={0}
@@ -439,6 +470,90 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                   <path fillRule="evenodd" d="M1 5.25A2.25 2.25 0 013.25 3h13.5A2.25 2.25 0 0119 5.25v9.5A2.25 2.25 0 0116.75 17H3.25A2.25 2.25 0 011 14.75v-9.5zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 00.75-.75v-2.69l-2.22-2.219a.75.75 0 00-1.06 0l-1.91 1.909.47.47a.75.75 0 11-1.06 1.06L6.53 8.091a.75.75 0 00-1.06 0l-2.97 2.97zM12 7a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
                 </svg>
                 Upload an image instead
+              </div>
+
+              {/* Hidden file inputs */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFileSelect(file)
+                }}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleFileSelect(file)
+                }}
+              />
+            </div>
+          )}
+
+          {/* ── Stage: paste ── */}
+          {stage === 'paste' && (
+            <div className="space-y-4">
+              <textarea
+                autoFocus
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={`Paste the special features list here. For example:\n\n• Audio commentary with director\n• Behind-the-scenes featurette\n• Theatrical trailer\n\nAny format works — bullets, numbered lists, or plain lines.`}
+                rows={10}
+                className="w-full resize-none rounded-xl border border-border bg-surface-overlay px-4 py-3 text-sm text-white placeholder-muted/40 outline-none focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={handleParsePaste}
+                disabled={!pasteText.trim()}
+                className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Parse Features →
+              </button>
+
+              {/* Secondary: photo options */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-[11px] text-muted">or use a photo instead</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-xs text-muted transition hover:border-border/80 hover:text-white/70"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 flex-shrink-0">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                  </svg>
+                  Take a Photo
+                </button>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+                  className={`flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs transition ${
+                    isDragging
+                      ? 'border-accent bg-accent/10 text-white'
+                      : 'border-border text-muted hover:border-border/80 hover:text-white/70'
+                  }`}
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 flex-shrink-0">
+                    <path fillRule="evenodd" d="M1 5.25A2.25 2.25 0 013.25 3h13.5A2.25 2.25 0 0119 5.25v9.5A2.25 2.25 0 0116.75 17H3.25A2.25 2.25 0 011 14.75v-9.5zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 00.75-.75v-2.69l-2.22-2.219a.75.75 0 00-1.06 0l-1.91 1.909.47.47a.75.75 0 11-1.06 1.06L6.53 8.091a.75.75 0 00-1.06 0l-2.97 2.97zM12 7a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
+                  </svg>
+                  Upload Image
+                </div>
               </div>
 
               {/* Hidden file inputs */}
@@ -506,7 +621,7 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
           {/* ── Stage: review ── */}
           {stage === 'review' && (
             <div className="space-y-4">
-              {/* Image thumbnail */}
+              {/* Review header — image path */}
               {previewSrc && (
                 <div className="flex items-start gap-4">
                   <img
@@ -525,17 +640,40 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        setStage('idle')
                         setCandidates([])
                         setPreviewSrc(null)
                         setCropSrc(null)
                         setPendingFile(null)
+                        setStage('idle')
                       }}
                       className="mt-2 text-xs text-muted underline transition hover:text-white"
                     >
                       ← Try a different image
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Review header — paste path */}
+              {!previewSrc && reviewSource === 'paste' && (
+                <div className="rounded-xl border border-border bg-surface-raised px-4 py-3 text-sm text-muted">
+                  <p>
+                    Found <span className="font-medium text-white">{candidates.length}</span> feature{candidates.length !== 1 ? 's' : ''}.{' '}
+                    <span className="font-medium text-accent">{checkedCount} selected</span> — adjust below, then confirm.
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Categories were auto-detected from the text. Edit any name, change the category, or uncheck items you don't want.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCandidates([])
+                      setStage('paste')
+                    }}
+                    className="mt-2 text-xs text-muted underline transition hover:text-white"
+                  >
+                    ← Paste different text
+                  </button>
                 </div>
               )}
 
@@ -631,7 +769,13 @@ export function BoxBackScanner({ onSave, onClose }: BoxBackScannerProps) {
                     type="text"
                     placeholder="Feature name…"
                     value={manualName}
-                    onChange={(e) => setManualName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setManualName(val)
+                      // Auto-detect category from name as the user types
+                      const detected = guessCategory(val)
+                      if (detected) setManualCategory(detected)
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && addManual()}
                     className="flex-1 min-w-[160px] rounded-lg border border-border bg-surface-overlay px-3 py-1.5 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
                   />
