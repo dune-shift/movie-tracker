@@ -266,6 +266,43 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
         </div>
       </div>
 
+      {/* ── Watch History ── */}
+      <div className="border-t border-border/40 px-3 pb-2.5 pt-2 space-y-2">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted/60">
+          Watch History
+        </p>
+
+        {/* Blind buy */}
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.blindBuy ?? false}
+            onChange={(e) => update({ blindBuy: e.target.checked })}
+            className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+          />
+          <span className="text-[11px] text-muted">
+            Blind buy (I haven't seen this film before)
+          </span>
+        </label>
+
+        {/* Mark as watched */}
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!draft.watchedAt}
+            onChange={(e) =>
+              update({ watchedAt: e.target.checked ? new Date().toISOString() : null })
+            }
+            className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+          />
+          <span className="text-[11px] text-muted">
+            {draft.watchedAt
+              ? `Watched · ${new Date(draft.watchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+              : 'Mark as watched'}
+          </span>
+        </label>
+      </div>
+
       {/* ── Footer: Save button (only shown when there are unsaved changes) ── */}
       {isDirty && (
         <div className="border-t border-border/40 flex justify-end px-3 py-2">

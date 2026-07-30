@@ -7,89 +7,33 @@ interface AuthPageProps {
 
 // ── Feature block illustrations ───────────────────────────────────────────────
 
-/** A clamshell/disc-case standing upright — evokes the physical release object */
+/** Book + disc — evokes a physical release on your shelf */
 function CaseIllustration() {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-12 w-12"
-      aria-hidden="true"
-    >
-      {/* Case body */}
-      <rect x="8" y="6" width="34" height="52" rx="3" stroke="#6366f1" strokeWidth="2" />
-      {/* Spine stripe */}
-      <rect x="8" y="6" width="8" height="52" rx="2" fill="#6366f1" fillOpacity="0.18" stroke="#6366f1" strokeWidth="2" />
-      {/* Cover art placeholder lines */}
-      <line x1="20" y1="18" x2="38" y2="18" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="20" y1="23" x2="34" y2="23" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-      {/* Disc peek at bottom */}
-      <ellipse cx="46" cy="46" rx="10" ry="10" fill="#1a1d27" stroke="#6366f1" strokeWidth="2" />
-      <circle cx="46" cy="46" r="3" fill="#6366f1" fillOpacity="0.4" stroke="#6366f1" strokeWidth="1.5" />
-      {/* Disc shine arc */}
-      <path d="M 38 42 A 10 10 0 0 1 50 40" stroke="#818cf8" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-    </svg>
+    <div className="flex items-center gap-3" aria-hidden="true">
+      <i className="fa-solid fa-book text-3xl" style={{ color: '#6366f1' }} />
+      <i className="fa-solid fa-compact-disc text-3xl" style={{ color: '#818cf8' }} />
+    </div>
   )
 }
 
-/** Two disc circles side-by-side — 4K + Blu-ray — evokes a multi-format release */
+/** Film strip + coins — evokes films and their value */
 function DiscsIllustration() {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-12 w-12"
-      aria-hidden="true"
-    >
-      {/* Back disc (Blu-ray) */}
-      <circle cx="30" cy="34" r="16" fill="#1a1d27" stroke="#6366f1" strokeWidth="2" />
-      <circle cx="30" cy="34" r="5" fill="#6366f1" fillOpacity="0.3" stroke="#6366f1" strokeWidth="1.5" />
-      <path d="M 16 28 A 16 16 0 0 1 36 18" stroke="#818cf8" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
-      {/* "BD" label */}
-      <text x="30" y="51" textAnchor="middle" fontSize="6" fill="#8b93a7" fontFamily="system-ui, sans-serif" fontWeight="600">BD</text>
-
-      {/* Front disc (4K) — slightly offset and on top */}
-      <circle cx="40" cy="26" r="16" fill="#0f1117" stroke="#818cf8" strokeWidth="2" />
-      <circle cx="40" cy="26" r="5" fill="#818cf8" fillOpacity="0.3" stroke="#818cf8" strokeWidth="1.5" />
-      <path d="M 26 20 A 16 16 0 0 1 46 10" stroke="#c7d2fe" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
-      {/* "4K" label */}
-      <text x="40" y="11" textAnchor="middle" fontSize="6" fill="#818cf8" fontFamily="system-ui, sans-serif" fontWeight="700">4K</text>
-    </svg>
+    <div className="flex items-center gap-3" aria-hidden="true">
+      <i className="fa-solid fa-film text-3xl" style={{ color: '#6366f1' }} />
+      <i className="fa-solid fa-coins text-3xl" style={{ color: '#818cf8' }} />
+    </div>
   )
 }
 
-/** A tag + a small bar chart — evokes tagging and data analysis */
+/** Tag + magnifying glass chart — evokes tagging and deep collection analysis */
 function AnalyzeIllustration() {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-12 w-12"
-      aria-hidden="true"
-    >
-      {/* Tag shape */}
-      <path
-        d="M 8 8 L 30 8 L 46 24 L 30 40 L 8 40 Z"
-        stroke="#6366f1"
-        strokeWidth="2"
-        fill="#6366f1"
-        fillOpacity="0.12"
-      />
-      {/* Tag hole */}
-      <circle cx="16" cy="24" r="3" stroke="#6366f1" strokeWidth="1.5" />
-      {/* Tag text lines */}
-      <line x1="22" y1="20" x2="36" y2="20" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="22" y1="28" x2="32" y2="28" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-
-      {/* Bar chart */}
-      <rect x="20" y="48" width="6" height="10" rx="1" fill="#6366f1" fillOpacity="0.4" />
-      <rect x="30" y="42" width="6" height="16" rx="1" fill="#6366f1" fillOpacity="0.65" />
-      <rect x="40" y="44" width="6" height="14" rx="1" fill="#818cf8" fillOpacity="0.85" />
-      <rect x="50" y="38" width="6" height="20" rx="1" fill="#818cf8" />
-    </svg>
+    <div className="flex items-center gap-3" aria-hidden="true">
+      <i className="fa-solid fa-tag text-3xl" style={{ color: '#6366f1' }} />
+      <i className="fa-solid fa-magnifying-glass-chart text-3xl" style={{ color: '#818cf8' }} />
+    </div>
   )
 }
 

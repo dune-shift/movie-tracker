@@ -33,6 +33,8 @@ interface FilmRow {
   format: string
   genres: string[]
   tags: string[]
+  blind_buy: boolean
+  watched_at: string | null
   sort_order: number
 }
 
@@ -56,6 +58,8 @@ function rowToFilm(row: FilmRow): LinkedFilm {
     format: (row.format ?? '') as LinkedFilm['format'],
     genres: (row.genres ?? []) as LinkedFilm['genres'],
     tags: row.tags ?? [],
+    blindBuy: row.blind_buy ?? false,
+    watchedAt: row.watched_at ?? null,
   }
 }
 
@@ -132,6 +136,8 @@ export async function insertRelease(release: Release, userId: string): Promise<v
         format: f.format ?? '',
         genres: f.genres ?? [],
         tags: f.tags ?? [],
+        blind_buy: f.blindBuy ?? false,
+        watched_at: f.watchedAt ?? null,
         sort_order: i,
       })),
     )
@@ -201,6 +207,8 @@ export async function updateRelease(
           format: f.format ?? '',
           genres: f.genres ?? [],
           tags: f.tags ?? [],
+          blind_buy: f.blindBuy ?? false,
+          watched_at: f.watchedAt ?? null,
           sort_order: i,
         })),
       )

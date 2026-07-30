@@ -63,26 +63,57 @@ export const FORMAT_OPTIONS = [
 ] as const
 
 export const LABEL_OPTIONS = [
-  'Major Studio',
-  'Criterion Collection',
-  'Arrow Video',
-  'Vinegar Syndrome',
-  'Kino Lorber',
-  'Shout! Factory',
-  'Scream Factory',
-  'Severin Films',
-  'Eureka / Masters of Cinema',
-  'Second Sight',
-  'Indicator',
-  'Imprint',
+  '101 Films',
+  '20th Century Studios',
   '88 Films',
-  'Code Red',
-  'MVD Rewind',
-  'Warner Archive',
-  'Mill Creek',
+  'A24',
   'AGFA',
+  'Anchor Bay Entertainment',
+  'Arrow Video',
+  'Blue Underground',
+  'Cauldron Films',
+  'Cinema Guild',
+  'ClassicFlix',
+  'Code Red',
+  'Cohen Media Group',
+  'The Criterion Collection',
+  'Deaf Crocodile',
   'DiabolikDVD',
-  'Other',
+  'Disney / Buena Vista',
+  'Eureka Classics',
+  'Flicker Alley',
+  'Full Moon Features',
+  'Grasshopper Film',
+  'Imprint',
+  'Kino Lorber',
+  'Lionsgate Films',
+  'MGM',
+  'Mill Creek',
+  'MVD Rewind',
+  'New Line Cinema',
+  'Olive Films',
+  'Oscilloscope Laboratories',
+  'Paramount Pictures',
+  'powerhouse/Indicator',
+  'Radiance Films',
+  'Raro Video',
+  'Sandpiper Pictures',
+  'Scream Factory',
+  'Second Run',
+  'Second Sight',
+  'Severin Films',
+  'Shout! Factory',
+  'Sony Pictures',
+  'StudioCanal',
+  'Synapse Films',
+  'Terror Vision',
+  'Troma Entertainment',
+  'Umbrella Entertainment',
+  'Unearthed Films',
+  'Universal Pictures',
+  'Vinegar Syndrome',
+  'Warner Archive',
+  'Warner Bros',
 ] as const
 
 export type Format = (typeof FORMAT_OPTIONS)[number]
@@ -98,6 +129,8 @@ export interface LinkedFilm {
   format?: Format | ''
   genres?: Genre[]        // controlled genre taxonomy
   tags?: string[]         // free-form user-defined micro-genre tags
+  blindBuy?: boolean      // true if the film was unseen at time of purchase
+  watchedAt?: string | null // ISO timestamp of first watch; null/undefined = unwatched
 }
 
 // The primary entity — a physical release on your shelf

@@ -1,10 +1,131 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Release, LinkedFilm, Film } from '../types'
 import { LABEL_OPTIONS } from '../types'
 import { getPosterUrl, getReleaseYear, searchFilms } from '../services/tmdb'
 import { uploadCoverImage } from '../services/storage'
 import { BarcodeScanner } from './BarcodeScanner'
 import { LinkedFilmEditor } from './LinkedFilmEditor'
+
+// ── Label combobox ────────────────────────────────────────────────────────────
+
+interface LabelComboboxProps {
+  value: string
+  onChange: (v: string) => void
+}
+
+function LabelCombobox({ value, onChange }: LabelComboboxProps) {
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+
+  const filtered = useMemo(() => {
+    const q = value.toLowerCase()
+    if (!q) return LABEL_OPTIONS as unknown as string[]
+    return (LABEL_OPTIONS as unknown as string[]).filter((l) =>
+      l.toLowerCase().includes(q),
+    )
+  }, [value])
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+        setActiveIndex(-1)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (activeIndex >= 0 && listRef.current) {
+      const item = listRef.current.children[activeIndex] as HTMLElement | undefined
+      item?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [activeIndex])
+
+  function commit(val: string) {
+    onChange(val)
+    setOpen(false)
+    setActiveIndex(-1)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (!open) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setOpen(true)
+        setActiveIndex(0)
+      }
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveIndex((i) => Math.max(i - 1, -1))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (activeIndex >= 0 && filtered[activeIndex]) {
+        commit(filtered[activeIndex])
+      } else {
+        setOpen(false)
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+      setActiveIndex(-1)
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="text"
+        value={value}
+        placeholder="e.g. Vinegar Syndrome"
+        autoComplete="off"
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+          setActiveIndex(-1)
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+      />
+      {open && filtered.length > 0 && (
+        <ul
+          ref={listRef}
+          className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-border bg-surface-raised py-1 shadow-xl"
+        >
+          {filtered.map((labelOption, i) => (
+            <li
+              key={labelOption}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                commit(labelOption)
+              }}
+              onMouseEnter={() => setActiveIndex(i)}
+              className={`cursor-pointer px-3 py-1.5 text-sm transition ${
+                i === activeIndex
+                  ? 'bg-accent/20 text-white'
+                  : 'text-muted hover:bg-surface-overlay hover:text-white'
+              }`}
+            >
+              {labelOption}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
 
 interface AddReleaseModalProps {
   userId: string
@@ -358,22 +479,10 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                 </label>
 
                 {/* Label */}
-                <label>
+                <div>
                   <span className="mb-1.5 block text-xs text-muted">Label</span>
-                  <input
-                    type="text"
-                    list="add-label-options"
-                    value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    placeholder="e.g. Shout! Factory"
-                    className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
-                  />
-                  <datalist id="add-label-options">
-                    {LABEL_OPTIONS.map((l) => (
-                      <option key={l} value={l} />
-                    ))}
-                  </datalist>
-                </label>
+                  <LabelCombobox value={label} onChange={setLabel} />
+                </div>
 
                 {/* Release Year + Spine */}
                 <div className="grid grid-cols-2 gap-3">
@@ -480,7 +589,10 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  if (!e.target.value) setSearchResults([])
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
                 placeholder="Search for a film on TMDB…"
                 autoFocus
