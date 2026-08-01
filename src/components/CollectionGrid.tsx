@@ -7,13 +7,16 @@ interface CollectionGridProps {
   releases: Release[]
   viewMode: 'releases' | 'films'
   filmGroups: FilmGroup[]
+  onUpdateRelease: (id: string, updates: Partial<Release>) => Promise<void>
 }
 
 export function CollectionGrid({
   releases,
   viewMode,
   filmGroups,
+  onUpdateRelease,
 }: CollectionGridProps) {
+
   if (releases.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-surface-raised/50 px-6 py-20 text-center">
@@ -30,8 +33,9 @@ export function CollectionGrid({
     return (
       <ul className="grid grid-cols-2 gap-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
         {filmGroups.map((group) => (
-          <FilmGroupCard key={group.key} group={group} />
+          <FilmGroupCard key={group.key} group={group} onUpdateRelease={onUpdateRelease} />
         ))}
+
       </ul>
     )
   }

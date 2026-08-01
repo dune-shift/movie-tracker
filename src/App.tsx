@@ -197,7 +197,9 @@ function App() {
                   loading={releasesLoading}
                   userId={user.id}
                   onAddRelease={addRelease}
+                  onUpdateRelease={updateRelease}
                 />
+
               }
             />
             <Route

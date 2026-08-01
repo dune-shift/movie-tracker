@@ -699,9 +699,11 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                       <LinkedFilmEditor
                         film={film}
                         autoSave
+                        showWatchedToggle={false}
                         onSave={updateFilm}
                         onRemove={() => removeFilm(film.tmdbId)}
                       />
+
                     </li>
                   ))}
                 </ul>

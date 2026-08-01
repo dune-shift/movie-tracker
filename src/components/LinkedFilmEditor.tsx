@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Format, Genre, LinkedFilm } from '../types'
 import { FORMAT_OPTIONS, GENRE_OPTIONS } from '../types'
 import { getPosterUrl } from '../services/tmdb'
+import { ConfirmRemoveButton } from './ConfirmRemoveButton'
+
 
 interface LinkedFilmEditorProps {
   film: LinkedFilm
@@ -21,7 +23,15 @@ interface LinkedFilmEditorProps {
    * of the UI already auto-saves on every change.
    */
   autoSave?: boolean
+  /**
+   * When false, the "Mark as watched" toggle is hidden. Use this in flows
+   * where you're initially adding a film to a release (e.g. AddReleaseModal) —
+   * marking something watched doesn't make sense until after you've actually
+   * received/purchased it. Defaults to true.
+   */
+  showWatchedToggle?: boolean
 }
+
 
 /**
  * A self-contained card for editing one linked film.
@@ -32,11 +42,47 @@ interface LinkedFilmEditorProps {
  * everything at the end) or on the Release detail page (where saving writes
  * directly to the database).
  */
-export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true, autoSave = false }: LinkedFilmEditorProps) {
+export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true, autoSave = false, showWatchedToggle = true }: LinkedFilmEditorProps) {
+
   const [draft, setDraft] = useState<LinkedFilm>(film)
   const [isDirty, setIsDirty] = useState(false)
   const [genrePanelOpen, setGenrePanelOpen] = useState(false)
   const [tagInput, setTagInput] = useState('')
+  const [blindBuyInfoOpen, setBlindBuyInfoOpen] = useState(false)
+  const [blindBuyInfoPos, setBlindBuyInfoPos] = useState({ top: 0, left: 0 })
+  const blindBuyInfoRef = useRef<HTMLDivElement>(null)
+  const blindBuyBtnRef = useRef<HTMLButtonElement>(null)
+
+  // Position the tooltip relative to the viewport (not the card) so the
+  // card's `overflow-hidden` (used to clip the poster thumbnail) never
+  // clips the tooltip text.
+  function openBlindBuyInfo() {
+    const rect = blindBuyBtnRef.current?.getBoundingClientRect()
+    if (rect) {
+      setBlindBuyInfoPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 })
+    }
+    setBlindBuyInfoOpen(true)
+  }
+
+  // Close the blind-buy info tooltip when tapping/clicking outside of it.
+  useEffect(() => {
+    if (!blindBuyInfoOpen) return
+    function handleOutside(e: MouseEvent | TouchEvent) {
+      const target = e.target as Node
+      if (
+        !blindBuyInfoRef.current?.contains(target) &&
+        !blindBuyBtnRef.current?.contains(target)
+      ) {
+        setBlindBuyInfoOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('touchstart', handleOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('touchstart', handleOutside)
+    }
+  }, [blindBuyInfoOpen])
 
   // Keep draft in sync with the film prop whenever the parent updates it
   // (e.g. after a save propagates through the DB), but only when there are
@@ -128,16 +174,12 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
 
           {/* Remove button */}
           {onRemove && (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="rounded p-1.5 text-muted transition hover:bg-surface-raised hover:text-white"
-              aria-label={`Remove ${draft.title}`}
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
-            </button>
+            <ConfirmRemoveButton
+              onConfirm={onRemove}
+              label="Remove"
+              ariaLabel={`Remove ${draft.title}`}
+              compact
+            />
           )}
         </div>
       )}
@@ -159,19 +201,16 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
           </select>
           <div className="flex-1" />
           {onRemove && (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="rounded p-1.5 text-muted transition hover:bg-surface-raised hover:text-white"
-              aria-label={`Remove ${draft.title}`}
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-              </svg>
-            </button>
+            <ConfirmRemoveButton
+              onConfirm={onRemove}
+              label="Remove"
+              ariaLabel={`Remove ${draft.title}`}
+              compact
+            />
           )}
         </div>
       )}
+
 
       {/* ── Genres + Tags ── */}
       <div className="border-t border-border/40 px-3 pb-2.5 pt-2 space-y-2">
@@ -267,41 +306,75 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
       </div>
 
       {/* ── Watch History ── */}
+      {showWatchedToggle && (
+        <div className="border-t border-border/40 px-3 pb-2.5 pt-2 space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted/60">
+            Watch History
+          </p>
+
+          {/* Mark as watched */}
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={!!draft.watchedAt}
+              onChange={(e) =>
+                update({ watchedAt: e.target.checked ? new Date().toISOString() : null })
+              }
+              className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+            />
+            <span className="text-[11px] text-muted">
+              {draft.watchedAt
+                ? `Watched · ${new Date(draft.watchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                : 'Mark as watched'}
+            </span>
+          </label>
+        </div>
+      )}
+
+      {/* ── Purchase History ── */}
       <div className="border-t border-border/40 px-3 pb-2.5 pt-2 space-y-2">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-muted/60">
-          Watch History
+          Purchase History
         </p>
 
         {/* Blind buy */}
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={draft.blindBuy ?? false}
-            onChange={(e) => update({ blindBuy: e.target.checked })}
-            className="accent-accent h-3.5 w-3.5 flex-shrink-0"
-          />
-          <span className="text-[11px] text-muted">
-            Blind buy (I haven't seen this film before)
-          </span>
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={draft.blindBuy ?? false}
+              onChange={(e) => update({ blindBuy: e.target.checked })}
+              className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+            />
+            <span className="text-[11px] text-muted">Blind buy</span>
+          </label>
 
-        {/* Mark as watched */}
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={!!draft.watchedAt}
-            onChange={(e) =>
-              update({ watchedAt: e.target.checked ? new Date().toISOString() : null })
-            }
-            className="accent-accent h-3.5 w-3.5 flex-shrink-0"
-          />
-          <span className="text-[11px] text-muted">
-            {draft.watchedAt
-              ? `Watched · ${new Date(draft.watchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-              : 'Mark as watched'}
-          </span>
-        </label>
+          <button
+            ref={blindBuyBtnRef}
+            type="button"
+            onClick={() => (blindBuyInfoOpen ? setBlindBuyInfoOpen(false) : openBlindBuyInfo())}
+            onMouseEnter={openBlindBuyInfo}
+            onMouseLeave={() => setBlindBuyInfoOpen(false)}
+            aria-label="What is a blind buy?"
+            className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border border-border text-[9px] font-semibold text-muted transition hover:border-accent/50 hover:text-white"
+          >
+            i
+          </button>
+
+          {blindBuyInfoOpen && (
+            <div
+              ref={blindBuyInfoRef}
+              style={{ top: blindBuyInfoPos.top, left: blindBuyInfoPos.left }}
+              className="fixed z-50 w-48 -translate-x-1/2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-[11px] text-muted shadow-lg"
+            >
+              Bought without having seen the film
+            </div>
+          )}
+
+        </div>
       </div>
+
+
 
       {/* ── Footer: Save button (only shown when there are unsaved changes) ── */}
       {isDirty && (

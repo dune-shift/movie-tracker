@@ -13,6 +13,8 @@ import { LABEL_OPTIONS, SPECIAL_FEATURE_CATEGORIES } from '../types'
 import { CollapsibleSection } from '../components/CollapsibleSection'
 import { BoxBackScanner } from '../components/BoxBackScanner'
 import { LinkedFilmEditor } from '../components/LinkedFilmEditor'
+import { ConfirmRemoveButton } from '../components/ConfirmRemoveButton'
+
 import { guessCategory } from '../services/ocrParser'
 import {
   formatRuntime,
@@ -769,13 +771,15 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
               />
             </label>
 
-            <button
-              type="button"
-              onClick={handleRemove}
-              className="mt-5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition hover:bg-red-500/20"
-            >
-              Remove from collection
-            </button>
+            <div className="mt-5">
+              <ConfirmRemoveButton
+                onConfirm={handleRemove}
+                label="Remove Release"
+                confirmLabel="Confirm remove release?"
+                ariaLabel={`Remove ${release.title} from collection`}
+              />
+            </div>
+
           </section>
         </div>
       </div>

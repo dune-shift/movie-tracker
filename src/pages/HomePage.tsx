@@ -9,7 +9,9 @@ interface HomePageProps {
   loading: boolean
   userId: string
   onAddRelease: (release: Release) => Promise<void>
+  onUpdateRelease: (id: string, updates: Partial<Release>) => Promise<void>
 }
+
 
 type ViewMode = 'releases' | 'films'
 
@@ -61,7 +63,8 @@ function buildFilmGroups(releases: Release[]): FilmGroup[] {
   })
 }
 
-export function HomePage({ releases, loading, userId, onAddRelease }: HomePageProps) {
+export function HomePage({ releases, loading, userId, onAddRelease, onUpdateRelease }: HomePageProps) {
+
   const [showModal, setShowModal] = useState(false)
   const [filterLabel, setFilterLabel] = useState('')
   const [filterFormat, setFilterFormat] = useState('')
@@ -299,7 +302,9 @@ export function HomePage({ releases, loading, userId, onAddRelease }: HomePagePr
         releases={filteredReleases}
         viewMode={viewMode}
         filmGroups={filmGroups}
+        onUpdateRelease={onUpdateRelease}
       />
+
 
       {showModal && (
         <AddReleaseModal
