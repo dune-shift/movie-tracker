@@ -50,11 +50,13 @@ With domain allowlisting enabled, TMDB will reject any request that doesn't orig
 
 ## Data storage
 
-All collection data is stored in your browser's `localStorage` under the key `kinobin-releases`. Nothing is sent to any external server.
+Collection data is stored in [Supabase](https://supabase.com) — a hosted Postgres database for release/film/special-feature records, and Supabase Storage for custom cover images. Data is scoped to your authenticated account and syncs across every device you sign in on.
 
-**Storage limit:** browsers cap localStorage at ~5 MB per origin. Custom cover images are automatically compressed to a max of 800 px / 80% JPEG quality (~50–150 KB each) before being stored. If you hit the limit, you'll see an alert prompting you to remove a release with a large cover image.
+Custom cover images are compressed client-side (max 800 px / 80% JPEG quality, ~50–150 KB each) before upload to keep uploads fast and storage usage low.
 
-> **Migrating from Fizpedia?** If you had data stored under the old `fizpedia-releases` key, Kinobin automatically migrates it to `kinobin-releases` on first load. No action required.
+You'll need your own Supabase project — see `.env.example` for the required `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` variables.
+
+> **Upgrading from an older, localStorage-only version of Kinobin?** On first load after signing in, Kinobin checks for a legacy `kinobin-releases` key in your browser's localStorage and offers to import it into your Supabase account. Once imported, the local copy is cleared.
 
 ---
 

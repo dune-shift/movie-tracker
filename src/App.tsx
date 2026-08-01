@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom'
 import type { Release } from './types'
 import { HomePage } from './pages/HomePage'
 import { ReleasePage } from './pages/ReleasePage'
+import { StatsPage } from './pages/StatsPage'
 import { AuthPage } from './pages/AuthPage'
 import { useAuth } from './hooks/useAuth'
 import { useReleases } from './hooks/useReleases'
@@ -83,6 +84,13 @@ function App() {
     )
   }
 
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition ${
+      isActive
+        ? 'border-accent text-white'
+        : 'border-transparent text-muted hover:text-white'
+    }`
+
   return (
     <BrowserRouter>
       <div className="mx-auto min-h-screen max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -114,6 +122,18 @@ function App() {
               </div>
             )}
           </div>
+
+          {/* ── Nav ── */}
+          {user && (
+            <nav className="mt-6 flex gap-1">
+              <NavLink to="/" end className={navLinkClass}>
+                Collection
+              </NavLink>
+              <NavLink to="/stats" className={navLinkClass}>
+                Stats
+              </NavLink>
+            </nav>
+          )}
         </header>
 
         {/* ── localStorage migration banner ── */}
@@ -190,6 +210,10 @@ function App() {
                   onRemove={removeRelease}
                 />
               }
+            />
+            <Route
+              path="/stats"
+              element={<StatsPage releases={releases} loading={releasesLoading} />}
             />
           </Routes>
         )}

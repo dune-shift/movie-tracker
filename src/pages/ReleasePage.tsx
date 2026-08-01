@@ -307,7 +307,10 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                   <input
                     type="text"
                     value={filmSearchQuery}
-                    onChange={(e) => setFilmSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setFilmSearchQuery(e.target.value)
+                      setFilmSearchResults([])
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
                     placeholder="Search TMDB for a film…"
                     autoFocus

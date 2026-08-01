@@ -591,7 +591,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
-                  if (!e.target.value) setSearchResults([])
+                  setSearchResults([])
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
                 placeholder="Search for a film on TMDB…"
@@ -662,14 +662,31 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
 
             {/* Linked films list */}
             <div className="mt-6">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
-                Films in this release
-                {films.length > 0 && (
-                  <span className="ml-1.5 normal-case text-accent-hover">
-                    ({films.length})
-                  </span>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted">
+                  Films in this release
+                  {films.length > 0 && (
+                    <span className="ml-1.5 normal-case text-accent-hover">
+                      ({films.length})
+                    </span>
+                  )}
+                </p>
+                {(searchQuery || searchResults.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setSearchResults([])
+                    }}
+                    className="flex items-center gap-1 rounded-md border border-border bg-surface-overlay px-2.5 py-1 text-xs text-muted transition hover:bg-surface-raised hover:text-white"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
+                      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                    </svg>
+                    Clear search
+                  </button>
                 )}
-              </p>
+              </div>
 
               {films.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-xs text-muted">
