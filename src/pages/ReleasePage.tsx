@@ -16,6 +16,8 @@ import { LinkedFilmEditor } from '../components/LinkedFilmEditor'
 import { ConfirmRemoveButton } from '../components/ConfirmRemoveButton'
 
 import { guessCategory } from '../services/ocrParser'
+import { normalizeWatchProviders, toLinkedFilm } from '../queries/collection'
+import { FilmSearchPanel } from '../components/FilmSearchPanel'
 import {
   formatRuntime,
   getFilmDetails,
@@ -49,10 +51,6 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
 
   // ── Add-film search state ────────────────────────────────
   const [showFilmSearch, setShowFilmSearch] = useState(false)
-  const [filmSearchQuery, setFilmSearchQuery] = useState('')
-  const [filmSearchResults, setFilmSearchResults] = useState<Film[]>([])
-  const [isFilmSearching, setIsFilmSearching] = useState(false)
-  const [filmSearchError, setFilmSearchError] = useState<string | null>(null)
 
   // ── Special features state ───────────────────────────────
   const [showBoxScanner, setShowBoxScanner] = useState(false)
@@ -84,35 +82,10 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     }
   }, [release, navigate])
 
-  async function handleFilmSearch() {
-    const q = filmSearchQuery.trim()
-    if (!q) return
-    setIsFilmSearching(true)
-    setFilmSearchError(null)
-    try {
-      const results = await searchFilms(q)
-      setFilmSearchResults(results.slice(0, 10))
-    } catch {
-      setFilmSearchError('Search failed. Check your API key.')
-      setFilmSearchResults([])
-    } finally {
-      setIsFilmSearching(false)
-    }
-  }
-
   function addFilmToRelease(film: Film) {
     if (!release) return
     if (release.films.some((f) => f.tmdbId === film.id)) return
-    const newFilm: LinkedFilm = {
-      tmdbId: film.id,
-      title: film.title,
-      year: getReleaseYear(film.release_date),
-      posterPath: film.poster_path,
-      formats: [],
-    }
-    onUpdate(release.id, { films: [...release.films, newFilm] })
-    setFilmSearchQuery('')
-    setFilmSearchResults([])
+    onUpdate(release.id, { films: [...release.films, toLinkedFilm(film)] })
     setShowFilmSearch(false)
   }
 
@@ -290,12 +263,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
               </h2>
               <button
                 type="button"
-                onClick={() => {
-                  setShowFilmSearch((v) => !v)
-                  setFilmSearchQuery('')
-                  setFilmSearchResults([])
-                  setFilmSearchError(null)
-                }}
+                onClick={() => setShowFilmSearch((v) => !v)}
                 className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition hover:bg-surface-overlay hover:text-white"
               >
                 {showFilmSearch ? '✕ Cancel' : '+ Add Film'}
@@ -305,84 +273,10 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
             {/* Search panel */}
             {showFilmSearch && (
               <div className="mb-4 rounded-xl border border-border bg-surface-raised p-4">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={filmSearchQuery}
-                    onChange={(e) => {
-                      setFilmSearchQuery(e.target.value)
-                      setFilmSearchResults([])
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
-                    placeholder="Search TMDB for a film…"
-                    autoFocus
-                    className="flex-1 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleFilmSearch}
-                    disabled={isFilmSearching || !filmSearchQuery.trim()}
-                    className="rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-muted transition hover:bg-surface-raised hover:text-white disabled:opacity-40"
-                  >
-                    {isFilmSearching ? '…' : 'Search'}
-                  </button>
-                </div>
-
-                {filmSearchError && (
-                  <p className="mt-2 text-xs text-red-400">{filmSearchError}</p>
-                )}
-
-                {filmSearchResults.length > 0 && (
-                  <ul className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
-                    {filmSearchResults.map((film) => {
-                      const alreadyAdded = release.films.some(
-                        (f) => f.tmdbId === film.id,
-                      )
-                      const posterUrl = getPosterUrl(film.poster_path)
-                      return (
-                        <li
-                          key={film.id}
-                          className="border-b border-border last:border-0"
-                        >
-                          <div className="flex w-full items-center gap-3 px-3 py-2">
-                            <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
-                              {posterUrl ? (
-                                <img
-                                  src={posterUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="h-full bg-surface-overlay" />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-white">
-                                {film.title}
-                              </p>
-                              <p className="text-xs text-muted">
-                                {getReleaseYear(film.release_date)}
-                              </p>
-                            </div>
-                            {alreadyAdded ? (
-                              <span className="flex-shrink-0 rounded-md bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
-                                ✓ Added
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => addFilmToRelease(film)}
-                                className="flex-shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-hover"
-                              >
-                                Add to Release
-                              </button>
-                            )}
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
+                <FilmSearchPanel
+                  onSelect={addFilmToRelease}
+                  disabledFilmIds={new Set(release.films.map((f) => f.tmdbId))}
+                />
               </div>
             )}
 
@@ -394,33 +288,11 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
               <div className="space-y-3">
                 {release.films.map((film) => {
                   const details = filmDetails[film.tmdbId]
-                  const providers = filmProviders[film.tmdbId]
+                  const { streaming: streamingProviders, purchase: purchaseProviders } =
+                    normalizeWatchProviders(filmProviders[film.tmdbId])
                   const posterUrl = getPosterUrl(
                     details?.poster_path ?? film.posterPath ?? null,
                   )
-
-                  const streamingProviders = [
-                    ...(providers?.flatrate ?? []),
-                    ...(providers?.free ?? []),
-                    ...(providers?.ads ?? []),
-                  ]
-                    .filter(
-                      (p, i, a) =>
-                        a.findIndex((q) => q.provider_id === p.provider_id) === i,
-                    )
-                    .sort((a, b) => a.display_priority - b.display_priority)
-                    .slice(0, 6)
-
-                  const purchaseProviders = [
-                    ...(providers?.buy ?? []),
-                    ...(providers?.rent ?? []),
-                  ]
-                    .filter(
-                      (p, i, a) =>
-                        a.findIndex((q) => q.provider_id === p.provider_id) === i,
-                    )
-                    .sort((a, b) => a.display_priority - b.display_priority)
-                    .slice(0, 6)
 
                   return (
                     <div

@@ -1,47 +1,10 @@
 import { useMemo } from 'react'
 import type { Release } from '../types'
+import { computeStats, topEntries } from '../queries/collection'
 
 interface StatsPageProps {
   releases: Release[]
   loading: boolean
-}
-
-// ── Aggregation helpers ─────────────────────────────────────
-
-/** Count occurrences of a key derived from each item. Falsy keys are skipped. */
-function countBy<T>(
-  items: T[],
-  keyFn: (item: T) => string | null | undefined,
-): Map<string, number> {
-  const map = new Map<string, number>()
-  for (const item of items) {
-    const key = keyFn(item)
-    if (!key) continue
-    map.set(key, (map.get(key) ?? 0) + 1)
-  }
-  return map
-}
-
-/** Sort entries by count, descending; optionally cap the list length. */
-function topEntries(map: Map<string, number>, limit?: number): [string, number][] {
-  const entries = [...map.entries()].sort((a, b) => b[1] - a[1])
-  return limit ? entries.slice(0, limit) : entries
-}
-
-const MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  year: 'numeric',
-})
-
-function monthKey(iso: string): string | null {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function monthLabel(key: string): string {
-  const [year, month] = key.split('-').map(Number)
-  return MONTH_FORMATTER.format(new Date(year, month - 1, 1))
 }
 
 // ── Presentational bits ──────────────────────────────────────
@@ -112,49 +75,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ── Page ──────────────────────────────────────────────────────
 
 export function StatsPage({ releases, loading }: StatsPageProps) {
-  const stats = useMemo(() => {
-    const allFilms = releases.flatMap((r) => r.films)
-    const totalFilms = allFilms.length
-
-    const watchedFilms = allFilms.filter((f) => !!f.watchedAt).length
-    const unwatchedFilms = totalFilms - watchedFilms
-
-    const blindBuyFilms = allFilms.filter((f) => f.blindBuy).length
-    const blindBuyWatched = allFilms.filter((f) => f.blindBuy && f.watchedAt).length
-
-    const labelCounts = countBy(releases, (r) => r.label.trim() || null)
-    const formatCounts = countBy(
-      allFilms.flatMap((f) => f.formats ?? []),
-      (f) => f,
-    )
-    const genreCounts = countBy(
-      allFilms.flatMap((f) => f.genres ?? []),
-      (g) => g,
-    )
-    const tagCounts = countBy(
-      allFilms.flatMap((f) => f.tags ?? []),
-      (t) => t,
-    )
-
-    const monthCounts = countBy(releases, (r) => monthKey(r.addedAt))
-    const timeline = [...monthCounts.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([key, count]) => ({ label: monthLabel(key), count }))
-
-    return {
-      totalReleases: releases.length,
-      totalFilms,
-      watchedFilms,
-      unwatchedFilms,
-      blindBuyFilms,
-      blindBuyWatched,
-      labelCounts,
-      formatCounts,
-      genreCounts,
-      tagCounts,
-      timeline,
-    }
-  }, [releases])
+  const stats = useMemo(() => computeStats(releases), [releases])
 
   if (loading) {
     return (

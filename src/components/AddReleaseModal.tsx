@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Release, LinkedFilm, Film } from '../types'
 import { LABEL_OPTIONS } from '../types'
-import { getPosterUrl, getReleaseYear, searchFilms } from '../services/tmdb'
+import { toLinkedFilm } from '../queries/collection'
+import { getPosterUrl, getReleaseYear } from '../services/tmdb'
 import { uploadCoverImage } from '../services/storage'
 import { BarcodeScanner } from './BarcodeScanner'
 import { LinkedFilmEditor } from './LinkedFilmEditor'
+import { FilmSearchPanel } from './FilmSearchPanel'
 
 // ── Label combobox ────────────────────────────────────────────────────────────
 
@@ -156,10 +158,6 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
 
   // ── Film fields (shared by both single-film and collection paths) ──
   const [films, setFilms] = useState<LinkedFilm[]>([])
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<Film[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const filmIds = new Set(films.map((f) => f.tmdbId))
 
@@ -241,40 +239,10 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  // ── Film search handlers ─────────────────────────────────
-  async function handleFilmSearch() {
-    const q = searchQuery.trim()
-    if (!q) return
-    setIsSearching(true)
-    setSearchError(null)
-    try {
-      const results = await searchFilms(q)
-      setSearchResults(results.slice(0, 10))
-    } catch {
-      setSearchError('Search failed. Check your API key.')
-      setSearchResults([])
-    } finally {
-      setIsSearching(false)
-    }
-  }
-
   /** Collection path: add one of potentially several films. */
   function addFilm(film: Film) {
     if (filmIds.has(film.id)) return
-    setFilms((prev) => [
-      ...prev,
-      {
-        tmdbId: film.id,
-        title: film.title,
-        year: getReleaseYear(film.release_date),
-        posterPath: film.poster_path,
-        formats: [],
-        genres: [],
-        tags: [],
-      },
-    ])
-    setSearchQuery('')
-    setSearchResults([])
+    setFilms((prev) => [...prev, toLinkedFilm(film)])
   }
 
   /**
@@ -283,20 +251,8 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
    * details step.
    */
   function selectSingleFilm(film: Film) {
-    setFilms([
-      {
-        tmdbId: film.id,
-        title: film.title,
-        year: getReleaseYear(film.release_date),
-        posterPath: film.poster_path,
-        formats: [],
-        genres: [],
-        tags: [],
-      },
-    ])
+    setFilms([toLinkedFilm(film)])
     setTitle(film.title)
-    setSearchQuery('')
-    setSearchResults([])
     setStep(2)
   }
 
@@ -449,9 +405,6 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
         {/* ── Chooser: Single Film vs Collection ── */}
         {releaseType === null && (
           <div className="p-6">
-            <p className="mb-5 text-sm text-muted">
-              How many films are on this release?
-            </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -522,71 +475,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                 </button>
               </div>
             ) : (
-              <>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value)
-                      setSearchResults([])
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
-                    placeholder="Search for a film on TMDB…"
-                    autoFocus
-                    className="flex-1 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleFilmSearch}
-                    disabled={isSearching || !searchQuery.trim()}
-                    className="rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-muted transition hover:bg-surface-raised hover:text-white disabled:opacity-40"
-                  >
-                    {isSearching ? '…' : 'Search'}
-                  </button>
-                </div>
-
-                {searchError && (
-                  <p className="mt-2 text-xs text-red-400">{searchError}</p>
-                )}
-
-                {searchResults.length > 0 && (
-                  <ul className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
-                    {searchResults.map((film) => {
-                      const posterUrl = getPosterUrl(film.poster_path)
-                      return (
-                        <li key={film.id} className="border-b border-border last:border-0">
-                          <button
-                            type="button"
-                            onClick={() => selectSingleFilm(film)}
-                            className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised"
-                          >
-                            <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
-                              {posterUrl ? (
-                                <img
-                                  src={posterUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <div className="h-full bg-surface-overlay" />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-white">
-                                {film.title}
-                              </p>
-                              <p className="text-xs text-muted">
-                                {getReleaseYear(film.release_date)}
-                              </p>
-                            </div>
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </>
+              <FilmSearchPanel onSelect={selectSingleFilm} />
             )}
           </div>
         )}
@@ -832,81 +721,10 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
               come back to this later.
             </p>
 
-            {/* Search bar */}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  setSearchResults([])
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
-                placeholder="Search for a film on TMDB…"
-                autoFocus
-                className="flex-1 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
-              />
-              <button
-                type="button"
-                onClick={handleFilmSearch}
-                disabled={isSearching || !searchQuery.trim()}
-                className="rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-muted transition hover:bg-surface-raised hover:text-white disabled:opacity-40"
-              >
-                {isSearching ? '…' : 'Search'}
-              </button>
-            </div>
-
-            {searchError && (
-              <p className="mt-2 text-xs text-red-400">{searchError}</p>
-            )}
-
-            {/* Search results */}
-            {searchResults.length > 0 && (
-              <ul className="mt-3 max-h-52 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
-                {searchResults.map((film) => {
-                  const added = filmIds.has(film.id)
-                  const posterUrl = getPosterUrl(film.poster_path)
-                  return (
-                    <li key={film.id} className="border-b border-border last:border-0">
-                      <div className="flex w-full items-center gap-3 px-3 py-2">
-                        <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
-                          {posterUrl ? (
-                            <img
-                              src={posterUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="h-full bg-surface-overlay" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-white">
-                            {film.title}
-                          </p>
-                          <p className="text-xs text-muted">
-                            {getReleaseYear(film.release_date)}
-                          </p>
-                        </div>
-                        {added ? (
-                          <span className="flex-shrink-0 rounded-md bg-accent/15 px-3 py-1 text-xs font-medium text-accent">
-                            ✓ Added
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => addFilm(film)}
-                            className="flex-shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white transition hover:bg-accent-hover"
-                          >
-                            Add to Release
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
+            <FilmSearchPanel
+              onSelect={addFilm}
+              disabledFilmIds={filmIds}
+            />
 
             {/* Linked films list */}
             <div className="mt-6">
@@ -919,21 +737,6 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                     </span>
                   )}
                 </p>
-                {(searchQuery || searchResults.length > 0) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery('')
-                      setSearchResults([])
-                    }}
-                    className="flex items-center gap-1 rounded-md border border-border bg-surface-overlay px-2.5 py-1 text-xs text-muted transition hover:bg-surface-raised hover:text-white"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
-                      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                    </svg>
-                    Clear search
-                  </button>
-                )}
               </div>
 
               {films.length === 0 ? (
