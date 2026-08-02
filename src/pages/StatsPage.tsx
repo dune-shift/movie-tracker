@@ -123,7 +123,10 @@ export function StatsPage({ releases, loading }: StatsPageProps) {
     const blindBuyWatched = allFilms.filter((f) => f.blindBuy && f.watchedAt).length
 
     const labelCounts = countBy(releases, (r) => r.label.trim() || null)
-    const formatCounts = countBy(allFilms, (f) => f.format || null)
+    const formatCounts = countBy(
+      allFilms.flatMap((f) => f.formats ?? []),
+      (f) => f,
+    )
     const genreCounts = countBy(
       allFilms.flatMap((f) => f.genres ?? []),
       (g) => g,

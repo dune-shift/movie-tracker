@@ -82,7 +82,7 @@ export function HomePage({ releases, loading, userId, onAddRelease, onUpdateRele
   // Derive unique formats present in the collection (from per-film formats)
   const availableFormats = useMemo(() => {
     return FORMAT_OPTIONS.filter((f) =>
-      releases.some((r) => r.films.some((film) => film.format === f)),
+      releases.some((r) => r.films.some((film) => film.formats?.includes(f))),
     )
   }, [releases])
 
@@ -96,7 +96,7 @@ export function HomePage({ releases, loading, userId, onAddRelease, onUpdateRele
   const filteredReleases = useMemo(() => {
     return releases.filter((r) => {
       if (filterLabel && r.label !== filterLabel) return false
-      if (filterFormat && !r.films.some((f) => f.format === filterFormat)) return false
+      if (filterFormat && !r.films.some((f) => f.formats?.includes(filterFormat as typeof FORMAT_OPTIONS[number]))) return false
       if (filterGenre && !r.films.some((f) => f.genres?.includes(filterGenre as Genre))) return false
       return true
     })

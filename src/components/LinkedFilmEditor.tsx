@@ -46,6 +46,7 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
 
   const [draft, setDraft] = useState<LinkedFilm>(film)
   const [isDirty, setIsDirty] = useState(false)
+  const [formatPanelOpen, setFormatPanelOpen] = useState(false)
   const [genrePanelOpen, setGenrePanelOpen] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [blindBuyInfoOpen, setBlindBuyInfoOpen] = useState(false)
@@ -105,6 +106,15 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
     }
   }
 
+  function toggleFormat(format: Format) {
+    const current = draft.formats ?? []
+    update({
+      formats: current.includes(format)
+        ? current.filter((f) => f !== format)
+        : [...current, format],
+    })
+  }
+
   function toggleGenre(genre: Genre) {
     const current = draft.genres ?? []
     update({
@@ -131,16 +141,18 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
     onSave(draft)
     setIsDirty(false)
     setGenrePanelOpen(false)
+    setFormatPanelOpen(false)
   }
 
   const posterUrl = getPosterUrl(draft.posterPath ?? null)
+  const selectedFormats = draft.formats ?? []
   const selectedGenres = draft.genres ?? []
   const filmTags = draft.tags ?? []
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-overlay">
 
-      {/* ── Full header: thumbnail · title · format · remove ── */}
+      {/* ── Full header: thumbnail · title · remove ── */}
       {showFilmHeader && (
         <div className="flex items-center gap-3 px-3 py-2">
           {/* Poster thumbnail */}
@@ -158,20 +170,6 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
             <p className="text-xs text-muted">{draft.year}</p>
           </div>
 
-          {/* Format select */}
-          <select
-            value={draft.format ?? ''}
-            onChange={(e) => update({ format: e.target.value as Format | '' })}
-            className="flex-shrink-0 rounded-md border border-border bg-surface-overlay px-2 py-1 text-xs text-white outline-none focus:border-accent"
-          >
-            <option value="">Format…</option>
-            {FORMAT_OPTIONS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-
           {/* Remove button */}
           {onRemove && (
             <ConfirmRemoveButton
@@ -184,36 +182,77 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
         </div>
       )}
 
-      {/* ── Compact strip (no header): format · remove ── */}
-      {!showFilmHeader && (
+      {/* ── Compact strip (no header): remove ── */}
+      {!showFilmHeader && onRemove && (
         <div className="flex items-center gap-2 px-3 py-2">
-          <select
-            value={draft.format ?? ''}
-            onChange={(e) => update({ format: e.target.value as Format | '' })}
-            className="rounded-md border border-border bg-surface-overlay px-2 py-1 text-xs text-white outline-none focus:border-accent"
-          >
-            <option value="">Set format…</option>
-            {FORMAT_OPTIONS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
           <div className="flex-1" />
-          {onRemove && (
-            <ConfirmRemoveButton
-              onConfirm={onRemove}
-              label="Remove"
-              ariaLabel={`Remove ${draft.title}`}
-              compact
-            />
-          )}
+          <ConfirmRemoveButton
+            onConfirm={onRemove}
+            label="Remove"
+            ariaLabel={`Remove ${draft.title}`}
+            compact
+          />
         </div>
       )}
 
 
-      {/* ── Genres + Tags ── */}
+      {/* ── Formats + Genres + Tags ── */}
       <div className="border-t border-border/40 px-3 pb-2.5 pt-2 space-y-2">
+
+        {/* Format toggle + selected pills */}
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFormatPanelOpen((v) => !v)}
+              className={`rounded-md border px-2 py-0.5 text-[11px] transition ${
+                formatPanelOpen
+                  ? 'border-accent bg-accent/10 text-accent'
+                  : 'border-border text-muted hover:border-accent/50 hover:text-white'
+              }`}
+            >
+              {selectedFormats.length === 0
+                ? '+ Formats'
+                : `Formats (${selectedFormats.length})`}
+            </button>
+            {selectedFormats.map((f) => (
+              <span
+                key={f}
+                className="flex items-center gap-1 rounded-md bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent-hover"
+              >
+                {f}
+                <button
+                  type="button"
+                  onClick={() => toggleFormat(f)}
+                  className="ml-0.5 text-accent-hover/60 hover:text-accent-hover"
+                  aria-label={`Remove ${f}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+
+          {/* Expandable format checkbox grid */}
+          {formatPanelOpen && (
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border border-border bg-surface p-3 sm:grid-cols-3">
+              {FORMAT_OPTIONS.map((f) => (
+                <label
+                  key={f}
+                  className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-surface-overlay"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedFormats.includes(f)}
+                    onChange={() => toggleFormat(f)}
+                    className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+                  />
+                  <span className="text-[11px] text-white">{f}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Genre toggle + selected pills */}
         <div>

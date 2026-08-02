@@ -126,12 +126,13 @@ export interface LinkedFilm {
   title: string
   year: string
   posterPath: string | null
-  format?: Format | ''
+  formats?: Format[]      // physical formats this film is present on (supports e.g. 4K + standard Blu-ray combo packs)
   genres?: Genre[]        // controlled genre taxonomy
   tags?: string[]         // free-form user-defined micro-genre tags
   blindBuy?: boolean      // true if the film was unseen at time of purchase
   watchedAt?: string | null // ISO timestamp of first watch; null/undefined = unwatched
 }
+
 
 // The primary entity — a physical release on your shelf
 export interface Release {

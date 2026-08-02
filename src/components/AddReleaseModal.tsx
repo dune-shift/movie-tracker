@@ -133,11 +133,14 @@ interface AddReleaseModalProps {
   onClose: () => void
 }
 
+type ReleaseType = 'single' | 'collection' | null
+
 export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProps) {
+  const [releaseType, setReleaseType] = useState<ReleaseType>(null)
   const [step, setStep] = useState<1 | 2>(1)
   const [isSaving, setIsSaving] = useState(false)
 
-  // ── Step 1 fields ────────────────────────────────────────
+  // ── Release detail fields ────────────────────────────────
   const [title, setTitle] = useState('')
   const [label, setLabel] = useState('')
   const [releaseYear, setReleaseYear] = useState<number | ''>('')
@@ -151,7 +154,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
   const [isDragging, setIsDragging] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
 
-  // ── Step 2 fields ────────────────────────────────────────
+  // ── Film fields (shared by both single-film and collection paths) ──
   const [films, setFilms] = useState<LinkedFilm[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Film[]>([])
@@ -255,6 +258,7 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
     }
   }
 
+  /** Collection path: add one of potentially several films. */
   function addFilm(film: Film) {
     if (filmIds.has(film.id)) return
     setFilms((prev) => [
@@ -264,13 +268,54 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
         title: film.title,
         year: getReleaseYear(film.release_date),
         posterPath: film.poster_path,
-        format: '',
+        formats: [],
         genres: [],
         tags: [],
       },
     ])
     setSearchQuery('')
     setSearchResults([])
+  }
+
+  /**
+   * Single Film path: selecting a search result both links the film and
+   * auto-populates the release title, then advances straight to the
+   * details step.
+   */
+  function selectSingleFilm(film: Film) {
+    setFilms([
+      {
+        tmdbId: film.id,
+        title: film.title,
+        year: getReleaseYear(film.release_date),
+        posterPath: film.poster_path,
+        formats: [],
+        genres: [],
+        tags: [],
+      },
+    ])
+    setTitle(film.title)
+    setSearchQuery('')
+    setSearchResults([])
+    setStep(2)
+  }
+
+  /** Single Film path: undo a selection and go back to searching. */
+  function clearSingleFilmSelection() {
+    setFilms([])
+    setTitle('')
+    setStep(1)
+  }
+
+  /**
+   * Escape hatch from the Single Film details step: converts this in-progress
+   * release into a Collection without losing anything already entered —
+   * the release detail fields carry over, and the already-selected film
+   * becomes the first film in the collection.
+   */
+  function convertToCollection() {
+    setReleaseType('collection')
+    setStep(2)
   }
 
   function removeFilm(tmdbId: number) {
@@ -280,6 +325,25 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
   /** Called by LinkedFilmEditor when the user saves a film card. */
   function updateFilm(updated: LinkedFilm) {
     setFilms((prev) => prev.map((f) => (f.tmdbId === updated.tmdbId ? updated : f)))
+  }
+
+  // ── Navigation ────────────────────────────────────────────
+  function chooseSingle() {
+    setReleaseType('single')
+    setStep(1)
+  }
+
+  function chooseCollection() {
+    setReleaseType('collection')
+    setStep(1)
+  }
+
+  function handleBack() {
+    if (step === 2) {
+      setStep(1)
+    } else {
+      setReleaseType(null)
+    }
   }
 
   // ── Save ────────────────────────────────────────────────
@@ -334,6 +398,18 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
 
   const canAdvance = title.trim().length > 0
 
+  // ── Header copy ───────────────────────────────────────────
+  const headerTitle =
+    releaseType === null
+      ? 'Add Release'
+      : releaseType === 'single'
+        ? step === 1
+          ? 'Find the Film'
+          : 'Release Details'
+        : step === 1
+          ? 'Add Release'
+          : 'Add Films to this Release'
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 py-10 backdrop-blur-sm">
       <div className="relative w-full max-w-3xl rounded-2xl border border-border bg-surface shadow-2xl">
@@ -341,22 +417,22 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
         {/* ── Header ── */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div>
-            <div className="mb-1.5 flex items-center gap-2">
-              <div className="flex gap-1">
-                {([1, 2] as const).map((s) => (
-                  <div
-                    key={s}
-                    className={`h-1 w-8 rounded-full transition-colors ${s <= step ? 'bg-accent' : 'bg-surface-overlay'}`}
-                  />
-                ))}
+            {releaseType !== null && (
+              <div className="mb-1.5 flex items-center gap-2">
+                <div className="flex gap-1">
+                  {([1, 2] as const).map((s) => (
+                    <div
+                      key={s}
+                      className={`h-1 w-8 rounded-full transition-colors ${s <= step ? 'bg-accent' : 'bg-surface-overlay'}`}
+                    />
+                  ))}
+                </div>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-accent">
+                  Step {step} of 2
+                </p>
               </div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-accent">
-                Step {step} of 2
-              </p>
-            </div>
-            <h2 className="text-base font-semibold text-white">
-              {step === 1 ? 'Add Release' : 'Add Films to this Release'}
-            </h2>
+            )}
+            <h2 className="text-base font-semibold text-white">{headerTitle}</h2>
           </div>
           <button
             type="button"
@@ -370,8 +446,154 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
           </button>
         </div>
 
-        {/* ── Step 1: Release Details ── */}
-        {step === 1 && (
+        {/* ── Chooser: Single Film vs Collection ── */}
+        {releaseType === null && (
+          <div className="p-6">
+            <p className="mb-5 text-sm text-muted">
+              How many films are on this release?
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={chooseSingle}
+                className="group rounded-xl border border-border bg-surface-overlay p-5 text-left transition hover:border-accent/60 hover:bg-surface-raised"
+              >
+                <div className="flex items-center gap-2" aria-hidden="true">
+                  <i className="fa-solid fa-book text-2xl" style={{ color: '#6366f1' }} />
+                  <i className="fa-solid fa-compact-disc text-2xl" style={{ color: '#818cf8' }} />
+                </div>
+                <p className="mt-2 text-sm font-semibold text-white">Single Film</p>
+                <p className="mt-1 text-xs text-muted">
+                  One film in the release
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={chooseCollection}
+                className="group rounded-xl border border-border bg-surface-overlay p-5 text-left transition hover:border-accent/60 hover:bg-surface-raised"
+              >
+                <div className="flex items-center gap-2" aria-hidden="true">
+                  <i className="fa-solid fa-book text-2xl" style={{ color: '#6366f1' }} />
+                  <i className="fa-solid fa-compact-disc text-2xl" style={{ color: '#818cf8' }} />
+                  <i className="fa-solid fa-compact-disc text-2xl" style={{ color: '#818cf8' }} />
+                  <i className="fa-solid fa-compact-disc text-2xl" style={{ color: '#818cf8' }} />
+                </div>
+                <p className="mt-2 text-sm font-semibold text-white">Collection</p>
+                <p className="mt-1 text-xs text-muted">
+                  Multiple films in the release
+                </p>
+              </button>
+
+            </div>
+          </div>
+        )}
+
+        {/* ── Single Film · Step 1: Find the Film ── */}
+        {releaseType === 'single' && step === 1 && (
+          <div className="p-6">
+            <p className="mb-5 text-sm text-muted">
+              Search TMDB for the film on this disc. Selecting a result will
+              automatically fill in the release title.
+            </p>
+
+            {films.length === 1 ? (
+              <div className="flex items-center gap-3 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2">
+                <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
+                  {getPosterUrl(films[0].posterPath) ? (
+                    <img
+                      src={getPosterUrl(films[0].posterPath)!}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full bg-surface-overlay" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-white">{films[0].title}</p>
+                  <p className="text-xs text-muted">{films[0].year}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearSingleFilmSelection}
+                  className="flex-shrink-0 rounded-md border border-border bg-surface-overlay px-3 py-1.5 text-xs text-muted transition hover:bg-surface-raised hover:text-white"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setSearchResults([])
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleFilmSearch()}
+                    placeholder="Search for a film on TMDB…"
+                    autoFocus
+                    className="flex-1 rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleFilmSearch}
+                    disabled={isSearching || !searchQuery.trim()}
+                    className="rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-muted transition hover:bg-surface-raised hover:text-white disabled:opacity-40"
+                  >
+                    {isSearching ? '…' : 'Search'}
+                  </button>
+                </div>
+
+                {searchError && (
+                  <p className="mt-2 text-xs text-red-400">{searchError}</p>
+                )}
+
+                {searchResults.length > 0 && (
+                  <ul className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border bg-surface-overlay">
+                    {searchResults.map((film) => {
+                      const posterUrl = getPosterUrl(film.poster_path)
+                      return (
+                        <li key={film.id} className="border-b border-border last:border-0">
+                          <button
+                            type="button"
+                            onClick={() => selectSingleFilm(film)}
+                            className="flex w-full items-center gap-3 px-3 py-2 text-left transition hover:bg-surface-raised"
+                          >
+                            <div className="h-12 w-8 flex-shrink-0 overflow-hidden rounded border border-border bg-surface-raised">
+                              {posterUrl ? (
+                                <img
+                                  src={posterUrl}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full bg-surface-overlay" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-white">
+                                {film.title}
+                              </p>
+                              <p className="text-xs text-muted">
+                                {getReleaseYear(film.release_date)}
+                              </p>
+                            </div>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Release Details (Collection · Step 1, or Single Film · Step 2) ── */}
+        {((releaseType === 'collection' && step === 1) ||
+          (releaseType === 'single' && step === 2)) && (
           <div className="p-6">
             <div className="grid gap-6 sm:grid-cols-[180px_1fr]">
 
@@ -472,8 +694,12 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Herzog: The Collection"
-                    autoFocus
+                    placeholder={
+                      releaseType === 'single'
+                        ? 'Auto-filled from the film you selected'
+                        : 'e.g. Herzog: The Collection'
+                    }
+                    autoFocus={releaseType === 'collection'}
                     className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
                   />
                 </label>
@@ -572,11 +798,33 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                 </label>
               </div>
             </div>
+
+            {/* Single Film path: inline editor for the one linked film */}
+            {releaseType === 'single' && films.length === 1 && (
+              <div className="mt-6">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
+                  This Film
+                </p>
+                <LinkedFilmEditor
+                  film={films[0]}
+                  autoSave
+                  showWatchedToggle={false}
+                  onSave={updateFilm}
+                />
+                <button
+                  type="button"
+                  onClick={convertToCollection}
+                  className="mt-3 text-xs text-muted underline decoration-dotted underline-offset-2 transition hover:text-white"
+                >
+                  + This release actually has more films
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── Step 2: Add Films ── */}
-        {step === 2 && (
+        {/* ── Collection · Step 2: Add Films ── */}
+        {releaseType === 'collection' && step === 2 && (
           <div className="p-6">
             <p className="mb-5 text-sm text-muted">
               Search TMDB to link the films included in this release. This pulls
@@ -716,14 +964,14 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
         <div className="flex items-center justify-between border-t border-border px-6 py-4">
           <button
             type="button"
-            onClick={step === 1 ? onClose : () => setStep(1)}
+            onClick={releaseType === null ? onClose : handleBack}
             className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition hover:bg-surface-overlay hover:text-white"
           >
-            {step === 1 ? 'Cancel' : '← Back'}
+            {releaseType === null ? 'Cancel' : '← Back'}
           </button>
 
           <div className="flex flex-wrap justify-end gap-2">
-            {step === 1 ? (
+            {releaseType === 'collection' && step === 1 && (
               <button
                 type="button"
                 onClick={() => setStep(2)}
@@ -732,7 +980,9 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
               >
                 Next: Add Films →
               </button>
-            ) : (
+            )}
+
+            {releaseType === 'collection' && step === 2 && (
               <>
                 <button
                   type="button"
@@ -751,6 +1001,17 @@ export function AddReleaseModal({ userId, onSave, onClose }: AddReleaseModalProp
                   {isSaving ? 'Saving…' : 'Save Release'}
                 </button>
               </>
+            )}
+
+            {releaseType === 'single' && step === 2 && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={!canAdvance || isSaving}
+                className="rounded-lg bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isSaving ? 'Saving…' : 'Save Release'}
+              </button>
             )}
           </div>
         </div>

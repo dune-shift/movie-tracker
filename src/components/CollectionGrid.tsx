@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import type { Format, FilmGroup, Release } from '../types'
+import type { FilmGroup, Release } from '../types'
 import { getPosterUrl } from '../services/tmdb'
 import { FilmGroupCard } from './MovieGroupCard'
 
@@ -91,9 +91,7 @@ export function CollectionGrid({
                 <div className="flex flex-wrap gap-1.5">
                   {[
                     ...new Set(
-                      release.films
-                        .map((f) => f.format)
-                        .filter((f): f is Format => !!f),
+                      release.films.flatMap((f) => f.formats ?? []),
                     ),
                   ].map((fmt) => (
                     <span

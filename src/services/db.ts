@@ -30,7 +30,7 @@ interface FilmRow {
   title: string
   year: string
   poster_path: string | null
-  format: string
+  formats: string[]
   genres: string[]
   tags: string[]
   blind_buy: boolean
@@ -55,7 +55,7 @@ function rowToFilm(row: FilmRow): LinkedFilm {
     title: row.title,
     year: row.year,
     posterPath: row.poster_path,
-    format: (row.format ?? '') as LinkedFilm['format'],
+    formats: (row.formats ?? []) as LinkedFilm['formats'],
     genres: (row.genres ?? []) as LinkedFilm['genres'],
     tags: row.tags ?? [],
     blindBuy: row.blind_buy ?? false,
@@ -133,7 +133,7 @@ export async function insertRelease(release: Release, userId: string): Promise<v
         title: f.title,
         year: f.year,
         poster_path: f.posterPath,
-        format: f.format ?? '',
+        formats: f.formats ?? [],
         genres: f.genres ?? [],
         tags: f.tags ?? [],
         blind_buy: f.blindBuy ?? false,
@@ -204,7 +204,7 @@ export async function updateRelease(
           title: f.title,
           year: f.year,
           poster_path: f.posterPath,
-          format: f.format ?? '',
+          formats: f.formats ?? [],
           genres: f.genres ?? [],
           tags: f.tags ?? [],
           blind_buy: f.blindBuy ?? false,

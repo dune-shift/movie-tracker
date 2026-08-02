@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Format, FilmGroup, LinkedFilm, Release } from '../types'
+import type { FilmGroup, LinkedFilm, Release } from '../types'
 import { getPosterUrl } from '../services/tmdb'
 
 interface FilmGroupCardProps {
@@ -164,8 +164,7 @@ export function FilmGroupCard({ group, onUpdateRelease }: FilmGroupCardProps) {
                           )}
                         </div>
                         {release.films
-                          .map((f) => f.format)
-                          .filter((f): f is Format => !!f)
+                          .flatMap((f) => f.formats ?? [])
                           .filter((f, i, arr) => arr.indexOf(f) === i)
                           .map((fmt) => (
                             <span

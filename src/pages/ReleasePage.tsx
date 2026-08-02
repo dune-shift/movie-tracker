@@ -108,7 +108,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
       title: film.title,
       year: getReleaseYear(film.release_date),
       posterPath: film.poster_path,
-      format: '',
+      formats: [],
     }
     onUpdate(release.id, { films: [...release.films, newFilm] })
     setFilmSearchQuery('')
