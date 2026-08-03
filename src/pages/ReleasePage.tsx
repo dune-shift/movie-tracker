@@ -9,8 +9,9 @@ import type {
   SpecialFeatureCategory,
   WatchProviderData,
 } from '../types'
-import { LABEL_OPTIONS, SPECIAL_FEATURE_CATEGORIES } from '../types'
+import { SPECIAL_FEATURE_CATEGORIES } from '../types'
 import { CollapsibleSection } from '../components/CollapsibleSection'
+import { fetchLabels } from '../services/db'
 import { BoxBackScanner } from '../components/BoxBackScanner'
 import { LinkedFilmEditor } from '../components/LinkedFilmEditor'
 import { ConfirmRemoveButton } from '../components/ConfirmRemoveButton'
@@ -51,6 +52,21 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
 
   // ── Add-film search state ────────────────────────────────
   const [showFilmSearch, setShowFilmSearch] = useState(false)
+
+  // ── Label suggestions ────────────────────────────────────
+  const [labelSuggestions, setLabelSuggestions] = useState<string[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchLabels()
+      .then((labels) => {
+        if (!cancelled) setLabelSuggestions(labels)
+      })
+      .catch((err) => {
+        console.error('[ReleasePage] failed to fetch labels', err)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   // ── Special features state ───────────────────────────────
   const [showBoxScanner, setShowBoxScanner] = useState(false)
@@ -621,7 +637,7 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                   className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white outline-none focus:border-accent"
                 />
                 <datalist id="edit-label-options">
-                  {LABEL_OPTIONS.map((l) => (
+                  {labelSuggestions.map((l) => (
                     <option key={l} value={l} />
                   ))}
                 </datalist>

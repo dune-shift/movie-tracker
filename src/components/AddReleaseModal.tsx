@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Release, LinkedFilm, Film } from '../types'
-import { LABEL_OPTIONS } from '../types'
 import { toLinkedFilm } from '../queries/collection'
 import { getPosterUrl, getReleaseYear } from '../services/tmdb'
 import { uploadCoverImage } from '../services/storage'
+import { fetchLabels } from '../services/db'
 import { BarcodeScanner } from './BarcodeScanner'
 import { LinkedFilmEditor } from './LinkedFilmEditor'
 import { FilmSearchPanel } from './FilmSearchPanel'
@@ -18,16 +18,37 @@ interface LabelComboboxProps {
 function LabelCombobox({ value, onChange }: LabelComboboxProps) {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
+  const [options, setOptions] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
-  const filtered = useMemo(() => {
-    const q = value.toLowerCase()
-    if (!q) return LABEL_OPTIONS as unknown as string[]
-    return (LABEL_OPTIONS as unknown as string[]).filter((l) =>
-      l.toLowerCase().includes(q),
-    )
+  // Debounced fetch from Supabase
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetchLabels(value.trim() || undefined)
+      .then((labels) => {
+        if (!cancelled) setOptions(labels)
+      })
+      .catch((err) => {
+        console.error('[LabelCombobox] failed to fetch labels', err)
+        if (!cancelled) setOptions([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [value])
+
+  const filtered = useMemo(() => {
+    const q = value.toLowerCase().trim()
+    if (!q) return options
+    // Client-side filter on top of server results for responsiveness
+    return options.filter((l) => l.toLowerCase().includes(q))
+  }, [options, value])
+
+  const canAddNew = value.trim() !== '' && !filtered.some((l) => l.toLowerCase() === value.toLowerCase().trim())
 
   // Close on outside click
   useEffect(() => {
@@ -55,6 +76,8 @@ function LabelCombobox({ value, onChange }: LabelComboboxProps) {
     setActiveIndex(-1)
   }
 
+  const displayItems = canAddNew ? [...filtered, value.trim()] : filtered
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!open) {
       if (e.key === 'ArrowDown') {
@@ -66,14 +89,16 @@ function LabelCombobox({ value, onChange }: LabelComboboxProps) {
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1))
+      setActiveIndex((i) => Math.min(i + 1, displayItems.length - 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setActiveIndex((i) => Math.max(i - 1, -1))
     } else if (e.key === 'Enter') {
       e.preventDefault()
-      if (activeIndex >= 0 && filtered[activeIndex]) {
-        commit(filtered[activeIndex])
+      if (activeIndex >= 0 && displayItems[activeIndex]) {
+        commit(displayItems[activeIndex])
+      } else if (value.trim()) {
+        commit(value.trim())
       } else {
         setOpen(false)
       }
@@ -99,28 +124,40 @@ function LabelCombobox({ value, onChange }: LabelComboboxProps) {
         onKeyDown={handleKeyDown}
         className="w-full rounded-lg border border-border bg-surface-overlay px-3 py-2 text-sm text-white placeholder-muted/50 outline-none focus:border-accent"
       />
-      {open && filtered.length > 0 && (
+      {open && (displayItems.length > 0 || loading) && (
         <ul
           ref={listRef}
           className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-border bg-surface-raised py-1 shadow-xl"
         >
-          {filtered.map((labelOption, i) => (
-            <li
-              key={labelOption}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                commit(labelOption)
-              }}
-              onMouseEnter={() => setActiveIndex(i)}
-              className={`cursor-pointer px-3 py-1.5 text-sm transition ${
-                i === activeIndex
-                  ? 'bg-accent/20 text-white'
-                  : 'text-muted hover:bg-surface-overlay hover:text-white'
-              }`}
-            >
-              {labelOption}
-            </li>
-          ))}
+          {loading && displayItems.length === 0 && (
+            <li className="px-3 py-1.5 text-sm text-muted">Loading…</li>
+          )}
+          {displayItems.map((labelOption, i) => {
+            const isNew = canAddNew && i === filtered.length
+            return (
+              <li
+                key={labelOption + (isNew ? '-new' : '')}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  commit(labelOption)
+                }}
+                onMouseEnter={() => setActiveIndex(i)}
+                className={`cursor-pointer px-3 py-1.5 text-sm transition ${
+                  i === activeIndex
+                    ? 'bg-accent/20 text-white'
+                    : 'text-muted hover:bg-surface-overlay hover:text-white'
+                }`}
+              >
+                {isNew ? (
+                  <span className="italic">
+                    Add “<span className="font-medium text-white">{labelOption}</span>”
+                  </span>
+                ) : (
+                  labelOption
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

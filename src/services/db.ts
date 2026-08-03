@@ -5,6 +5,61 @@
 import { supabase } from './supabase'
 import type { Release, LinkedFilm, SpecialFeature } from '../types'
 
+// ── Label helpers ─────────────────────────────────────────────────────────────
+
+function normalizeLabel(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+export async function fetchLabels(query?: string): Promise<string[]> {
+  let q = supabase
+    .from('labels')
+    .select('name')
+    .order('usage_count', { ascending: false })
+
+  if (query) {
+    q = q.ilike('name', `%${query}%`)
+  }
+
+  const { data, error } = await q.limit(50)
+  if (error) throw error
+  return (data ?? []).map((row) => row.name)
+}
+
+export async function upsertLabel(name: string): Promise<void> {
+  const trimmed = name.trim()
+  if (!trimmed) return
+
+  const normalized = normalizeLabel(trimmed)
+
+  const { error } = await supabase.from('labels').upsert(
+    {
+      name: trimmed,
+      normalized,
+      usage_count: 0, // trigger will handle increment if you add one, otherwise we bump manually
+    },
+    { onConflict: 'normalized', ignoreDuplicates: true },
+  )
+
+  if (error) throw error
+}
+
+/** Increment the usage count for a label. Call after successfully saving a release. */
+export async function bumpLabelUsage(name: string): Promise<void> {
+  const normalized = normalizeLabel(name)
+  const { data } = await supabase
+    .from('labels')
+    .select('usage_count')
+    .eq('normalized', normalized)
+    .single()
+  const current = data?.usage_count ?? 0
+  const { error } = await supabase
+    .from('labels')
+    .update({ usage_count: current + 1 })
+    .eq('normalized', normalized)
+  if (error) throw error
+}
+
 // ── DB row shapes (snake_case Postgres columns) ───────────────────────────────
 
 interface ReleaseRow {
@@ -158,6 +213,12 @@ export async function insertRelease(release: Release, userId: string): Promise<v
     )
     if (sfErr) throw sfErr
   }
+
+  // 4. Ensure label exists in the global pool
+  if (release.label.trim()) {
+    await upsertLabel(release.label)
+    await bumpLabelUsage(release.label)
+  }
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -237,6 +298,12 @@ export async function updateRelease(
       )
       if (insErr) throw insErr
     }
+  }
+
+  // Ensure label exists in the global pool if it changed
+  if (scalar.label !== undefined && scalar.label.trim()) {
+    await upsertLabel(scalar.label)
+    await bumpLabelUsage(scalar.label)
   }
 }
 
