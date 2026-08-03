@@ -19,7 +19,26 @@ function shortFormat(format: string): string {
 export function FilmGroupCard({ group, onUpdateRelease }: FilmGroupCardProps) {
   const [expanded, setExpanded] = useState(false)
 
-  /** Toggle the watched state for this film within a specific release copy. */
+  /** Toggle watch state for a specific format of a film in a release. */
+  function toggleFormatWatched(release: FilmGroup['releases'][number], film: LinkedFilm, fmt: string) {
+    const isWatched = (film.watchedByFormat as Record<string, string> | undefined)?.[fmt] !== undefined
+    const nextWatchedByFormat: Record<string, string> = { ...(film.watchedByFormat ?? {}) }
+
+    if (isWatched) {
+      delete nextWatchedByFormat[fmt]
+    } else {
+      nextWatchedByFormat[fmt] = new Date().toISOString()
+    }
+
+    const updatedFilms = release.films.map((f) =>
+      f.tmdbId === film.tmdbId
+        ? { ...f, watchedByFormat: nextWatchedByFormat }
+        : f,
+    )
+    onUpdateRelease(release.id, { films: updatedFilms })
+  }
+
+  /** Toggle the watched state at the film level (for releases with no formats specified). */
   function toggleWatched(release: FilmGroup['releases'][number], film: LinkedFilm) {
     const updatedFilms = release.films.map((f) =>
       f.tmdbId === film.tmdbId
@@ -36,19 +55,27 @@ export function FilmGroupCard({ group, onUpdateRelease }: FilmGroupCardProps) {
     group.releases[0]?.coverUrl ||
     null
 
-  const copyCount = group.releases.length
+  // Build a flat list of format copies across all releases for this film
+  const formatCopies = group.releases.flatMap((release) => {
+    const film = release.films.find((f) => f.tmdbId === group.tmdbId)
+    if (!film) return []
+    const formats = film.formats?.length ? film.formats : [null]
+    return formats.map((fmt) => ({ release, film, format: fmt }))
+  })
 
-  // For each release copy, find the linked film instance matching this group.
-  const copyFilms = group.releases.map((release) => ({
-    release,
-    film: release.films.find((f) => f.tmdbId === group.tmdbId),
-  }))
+  const copyCount = formatCopies.length
 
-  const watchedCount = copyFilms.filter(({ film }) => !!film?.watchedAt).length
+  const watchedCount = formatCopies.filter(({ film, format }) =>
+    format ? (film.watchedByFormat as Record<string, string> | undefined)?.[format] !== undefined : (!film.watchedByFormat && !!film.watchedAt)
+  ).length
 
   // Single-copy films get a direct one-click toggle on the collapsed card.
-  const singleCopy = copyCount === 1 ? copyFilms[0] : null
-  const singleCopyWatched = !!singleCopy?.film?.watchedAt
+  const singleCopy = copyCount === 1 ? formatCopies[0] : null
+  const singleCopyWatched = singleCopy
+    ? (singleCopy.format
+        ? !!singleCopy.film.watchedByFormat?.[singleCopy.format]
+        : !!singleCopy.film.watchedAt)
+    : false
 
   return (
     <li>
@@ -102,13 +129,21 @@ export function FilmGroupCard({ group, onUpdateRelease }: FilmGroupCardProps) {
                   tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (singleCopy.film) toggleWatched(singleCopy.release, singleCopy.film)
+                    if (singleCopy.format && singleCopy.film) {
+                      toggleFormatWatched(singleCopy.release, singleCopy.film, singleCopy.format)
+                    } else if (singleCopy.film) {
+                      toggleWatched(singleCopy.release, singleCopy.film)
+                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
                       e.stopPropagation()
-                      if (singleCopy.film) toggleWatched(singleCopy.release, singleCopy.film)
+                      if (singleCopy.format && singleCopy.film) {
+                        toggleFormatWatched(singleCopy.release, singleCopy.film, singleCopy.format)
+                      } else if (singleCopy.film) {
+                        toggleWatched(singleCopy.release, singleCopy.film)
+                      }
                     }
                   }}
                   className={`inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium transition ${
@@ -141,11 +176,13 @@ export function FilmGroupCard({ group, onUpdateRelease }: FilmGroupCardProps) {
               Your copies
             </p>
             <ul className="space-y-1">
-              {copyFilms.map(({ release, film: filmInThisCopy }) => {
-                const isWatched = !!filmInThisCopy?.watchedAt
+              {formatCopies.map(({ release, film, format }) => {
+                const isWatched = format
+                  ? (film.watchedByFormat as Record<string, string> | undefined)?.[format] !== undefined
+                  : (!film.watchedByFormat && !!film.watchedAt)
 
                 return (
-                  <li key={release.id}>
+                  <li key={`${release.id}-${format ?? 'default'}`}>
                     <div className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition hover:bg-surface-raised">
                       <Link
                         to={`/release/${release.id}`}
@@ -163,56 +200,52 @@ export function FilmGroupCard({ group, onUpdateRelease }: FilmGroupCardProps) {
                             </p>
                           )}
                         </div>
-                        {release.films
-                          .flatMap((f) => f.formats ?? [])
-                          .filter((f, i, arr) => arr.indexOf(f) === i)
-                          .map((fmt) => (
-                            <span
-                              key={fmt}
-                              className="flex-shrink-0 rounded-md bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent-hover"
-                            >
-                              {shortFormat(fmt)}
-                            </span>
-                          ))}
+                        {format && (
+                          <span className="flex-shrink-0 rounded-md bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent-hover">
+                            {shortFormat(format)}
+                          </span>
+                        )}
                       </Link>
 
                       {/* Quick "mark as watched" toggle for this copy */}
-                      {filmInThisCopy && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            toggleWatched(release, filmInThisCopy)
-                          }}
-                          aria-label={isWatched ? 'Mark as unwatched' : 'Mark as watched'}
-                          title={isWatched ? 'Watched' : 'Mark as watched'}
-                          className={`flex-shrink-0 rounded-md border p-1 transition ${
-                            isWatched
-                              ? 'border-accent/40 bg-accent/15 text-accent'
-                              : 'border-border text-muted hover:border-accent/50 hover:text-white'
-                          }`}
-                        >
-                          <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
-                            {isWatched ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          if (format) {
+                            toggleFormatWatched(release, film, format)
+                          } else {
+                            toggleWatched(release, film)
+                          }
+                        }}
+                        aria-label={isWatched ? 'Mark as unwatched' : 'Mark as watched'}
+                        title={isWatched ? 'Watched' : 'Mark as watched'}
+                        className={`flex-shrink-0 rounded-md border p-1 transition ${
+                          isWatched
+                            ? 'border-accent/40 bg-accent/15 text-accent'
+                            : 'border-border text-muted hover:border-accent/50 hover:text-white'
+                        }`}
+                      >
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                          {isWatched ? (
+                            <path
+                              fillRule="evenodd"
+                              d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                              clipRule="evenodd"
+                            />
+                          ) : (
+                            <>
+                              <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
                               <path
                                 fillRule="evenodd"
-                                d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+                                d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
                                 clipRule="evenodd"
                               />
-                            ) : (
-                              <>
-                                <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />
-                                <path
-                                  fillRule="evenodd"
-                                  d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                                  clipRule="evenodd"
-                                />
-                              </>
-                            )}
-                          </svg>
-                        </button>
-                      )}
+                            </>
+                          )}
+                        </svg>
+                      </button>
                     </div>
                   </li>
                 )

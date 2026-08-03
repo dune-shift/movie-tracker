@@ -351,22 +351,70 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
             Watch History
           </p>
 
-          {/* Mark as watched */}
-          <label className="flex cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              checked={!!draft.watchedAt}
-              onChange={(e) =>
-                update({ watchedAt: e.target.checked ? new Date().toISOString() : null })
-              }
-              className="accent-accent h-3.5 w-3.5 flex-shrink-0"
-            />
-            <span className="text-[11px] text-muted">
-              {draft.watchedAt
-                ? `Watched · ${new Date(draft.watchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                : 'Mark as watched'}
-            </span>
-          </label>
+          {/* Per-format watches when formats are selected */}
+          {selectedFormats.length > 0 ? (
+            <div className="space-y-1.5">
+              {selectedFormats.map((fmt) => {
+                const ts = draft.watchedByFormat?.[fmt]
+                return (
+                  <label key={fmt} className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!ts}
+                      onChange={(e) => {
+                        const next: Partial<Record<Format, string>> = { ...(draft.watchedByFormat ?? {}) }
+                        if (e.target.checked) {
+                          next[fmt] = new Date().toISOString()
+                        } else {
+                          delete next[fmt]
+                        }
+                        update({ watchedByFormat: next })
+                      }}
+                      className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+                    />
+                    <span className="text-[11px] text-muted">
+                      {ts
+                        ? `${fmt} · watched ${new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        : fmt}
+                    </span>
+                  </label>
+                )
+              })}
+              {/* Single "mark all watched" helper */}
+              {selectedFormats.some((f) => !draft.watchedByFormat?.[f]) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next: Partial<Record<Format, string>> = { ...(draft.watchedByFormat ?? {}) }
+                    selectedFormats.forEach((fmt) => {
+                      if (!next[fmt]) next[fmt] = new Date().toISOString()
+                    })
+                    update({ watchedByFormat: next })
+                  }}
+                  className="mt-1 text-[11px] text-accent hover:underline"
+                >
+                  Mark all watched
+                </button>
+              )}
+            </div>
+          ) : (
+            /* Single "Mark as watched" when no formats specified */
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={!!draft.watchedAt}
+                onChange={(e) =>
+                  update({ watchedAt: e.target.checked ? new Date().toISOString() : null })
+                }
+                className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+              />
+              <span className="text-[11px] text-muted">
+                {draft.watchedAt
+                  ? `Watched · ${new Date(draft.watchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                  : 'Mark as watched'}
+              </span>
+            </label>
+          )}
         </div>
       )}
 

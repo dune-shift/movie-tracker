@@ -76,6 +76,7 @@ export interface LinkedFilm {
   tags?: string[]         // free-form user-defined micro-genre tags
   blindBuy?: boolean      // true if the film was unseen at time of purchase
   watchedAt?: string | null // ISO timestamp of first watch; null/undefined = unwatched
+  watchedByFormat?: Partial<Record<Format, string>> // per-format watch timestamps; takes precedence over watchedAt when formats exist
 }
 
 

@@ -49,7 +49,7 @@ values
   ('Olive Films', 'olive films', 0),
   ('Oscilloscope Laboratories', 'oscilloscope laboratories', 0),
   ('Paramount Pictures', 'paramount pictures', 0),
-  ('powerhouse/Indicator', 'powerhouse/indicator', 0),
+  ('Indicator/Powerhouse', 'indicator/powerhouse', 0),
   ('Radiance Films', 'radiance films', 0),
   ('Raro Video', 'raro video', 0),
   ('Sandpiper Pictures', 'sandpiper pictures', 0),

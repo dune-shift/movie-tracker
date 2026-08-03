@@ -179,11 +179,18 @@ export function computeStats(releases: Release[]): CollectionStats {
   const allFilms = releases.flatMap((r) => r.films)
   const totalFilms = allFilms.length
 
-  const watchedFilms = allFilms.filter((f) => !!f.watchedAt).length
+  function isFilmWatched(film: (typeof allFilms)[number]): boolean {
+    if (film.formats && film.formats.length > 0) {
+      return film.formats.every((fmt) => film.watchedByFormat?.[fmt] !== undefined)
+    }
+    return !!film.watchedAt
+  }
+
+  const watchedFilms = allFilms.filter(isFilmWatched).length
   const unwatchedFilms = totalFilms - watchedFilms
 
   const blindBuyFilms = allFilms.filter((f) => f.blindBuy).length
-  const blindBuyWatched = allFilms.filter((f) => f.blindBuy && f.watchedAt).length
+  const blindBuyWatched = allFilms.filter((f) => f.blindBuy && isFilmWatched(f)).length
 
   const labelCounts = countBy(releases, (r) => r.label.trim() || null)
   const formatCounts = countBy(
