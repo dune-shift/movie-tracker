@@ -34,9 +34,10 @@ interface ReleasePageProps {
   userId: string
   onUpdate: (id: string, updates: Partial<Release>) => Promise<void>
   onRemove: (id: string) => Promise<void>
+  onRateFeature: (releaseId: string, featureId: string, rating: 1 | -1 | null) => Promise<void>
 }
 
-export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) {
+export function ReleasePage({ releases, onUpdate, onRemove, onRateFeature }: ReleasePageProps) {
   const { id } = useParams()
   const navigate = useNavigate()
 
@@ -145,6 +146,15 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
     onUpdate(release.id, {
       specialFeatures: (release.specialFeatures ?? []).filter((f) => f.id !== featureId),
     })
+  }
+
+  function handleRateFeature(featureId: string, direction: 1 | -1) {
+    if (!release) return
+    const feature = release.specialFeatures.find((f) => f.id === featureId)
+    const current = feature?.userRating
+    // Toggle: same vote removes it, different vote changes it
+    const next = current === direction ? null : direction
+    onRateFeature(release.id, featureId, next)
   }
 
   if (!release) return null
@@ -584,6 +594,38 @@ export function ReleasePage({ releases, onUpdate, onRemove }: ReleasePageProps) 
                                       {feat.category}
                                     </span>
                                   )}
+                                </div>
+                                <div className="flex items-center gap-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRateFeature(feat.id, 1)}
+                                    className={`rounded p-1 transition ${
+                                      feat.userRating === 1
+                                        ? 'text-green-400'
+                                        : 'text-muted hover:text-white'
+                                    }`}
+                                    aria-label={`Thumbs up ${feat.name}`}
+                                    title="Thumbs up"
+                                  >
+                                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                                      <path d="M1 8.25a1.25 1.25 0 112.5 0v7.5a1.25 1.25 0 11-2.5 0v-7.5zM11 3a1 1 0 00-1 1v7.268a2 2 0 01.623 1.338l.166 1.456c.04.346.237.646.487.876.24.221.536.324.724.324.1 0 .19-.027.274-.072a2.09 2.09 0 00.794-1.128l.6-2.67c.028-.131.102-.248.21-.338A1.998 1.998 0 0015.5 10V6a1 1 0 00-1-1h-3.5z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRateFeature(feat.id, -1)}
+                                    className={`rounded p-1 transition ${
+                                      feat.userRating === -1
+                                        ? 'text-red-400'
+                                        : 'text-muted hover:text-white'
+                                    }`}
+                                    aria-label={`Thumbs down ${feat.name}`}
+                                    title="Thumbs down"
+                                  >
+                                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                                      <path d="M18.905 12.75a1.25 1.25 0 11-2.5 0v-7.5a1.25 1.25 0 112.5 0v7.5zM8.905 17v-1.992a2 2 0 01-.602-1.291l-.233-1.444a.86.86 0 00-.375-.648c-.234-.173-.537-.26-.837-.26a1.033 1.033 0 00-.353.071 2.07 2.07 0 00-.855 1.153l-.651 2.695a.52.52 0 01-.211.315A2 2 0 004.5 17v4a1 1 0 001 1h3.5a1 1 0 001-1v-4z" />
+                                    </svg>
+                                  </button>
                                 </div>
                                 <button
                                   type="button"

@@ -21,6 +21,7 @@ function App() {
     addRelease,
     updateRelease,
     removeRelease,
+    rateSpecialFeature,
   } = useReleases(user?.id ?? null)
 
   // ── localStorage migration ────────────────────────────────
@@ -210,6 +211,7 @@ function App() {
                   userId={user.id}
                   onUpdate={updateRelease}
                   onRemove={removeRelease}
+                  onRateFeature={rateSpecialFeature}
                 />
               }
             />

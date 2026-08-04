@@ -150,10 +150,11 @@ function rowToRelease(row: ReleaseRow): Release {
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 
-export async function fetchReleases(): Promise<Release[]> {
+export async function fetchReleases(userId: string): Promise<Release[]> {
   const { data, error } = await supabase
     .from('releases')
     .select('*, films(*), special_features(*)')
+    .eq('user_id', userId)
     .order('added_at', { ascending: false })
 
   if (error) throw error
@@ -277,26 +278,32 @@ export async function updateRelease(
     }
   }
 
-  // Replace special features (delete-then-reinsert)
+  // Upsert special features: delete removed, insert new, update changed
   if (specialFeatures !== undefined) {
-    const { error: delErr } = await supabase
-      .from('special_features')
-      .delete()
-      .eq('release_id', id)
+    const keptIds = specialFeatures.map((sf) => sf.id)
+
+    let q = supabase.from('special_features').delete().eq('release_id', id)
+    if (keptIds.length > 0) {
+      q = q.not('id', 'in', `(${keptIds.map((x) => `'${x}'`).join(',')})`)
+    }
+    const { error: delErr } = await q
     if (delErr) throw delErr
 
     if (specialFeatures.length > 0) {
-      const { error: insErr } = await supabase.from('special_features').insert(
-        specialFeatures.map((sf, i) => ({
-          id: sf.id,
-          release_id: id,
-          name: sf.name,
-          category: sf.category ?? '',
-          disc: sf.disc !== undefined && sf.disc !== '' ? sf.disc : null,
-          sort_order: i,
-        })),
-      )
-      if (insErr) throw insErr
+      const { error: upsErr } = await supabase
+        .from('special_features')
+        .upsert(
+          specialFeatures.map((sf, i) => ({
+            id: sf.id,
+            release_id: id,
+            name: sf.name,
+            category: sf.category ?? '',
+            disc: sf.disc !== undefined && sf.disc !== '' ? sf.disc : null,
+            sort_order: i,
+          })),
+          { onConflict: 'id' },
+        )
+      if (upsErr) throw upsErr
     }
   }
 
@@ -312,4 +319,56 @@ export async function updateRelease(
 export async function deleteRelease(id: string): Promise<void> {
   const { error } = await supabase.from('releases').delete().eq('id', id)
   if (error) throw error
+}
+
+// ── Special Feature Ratings ───────────────────────────────────────────────────
+
+export async function rateSpecialFeature(
+  releaseId: string,
+  specialFeatureId: string,
+  userId: string,
+  rating: 1 | -1 | null,
+): Promise<void> {
+  if (rating === null) {
+    const { error } = await supabase
+      .from('special_feature_ratings')
+      .delete()
+      .eq('user_id', userId)
+      .eq('special_feature_id', specialFeatureId)
+    if (error) throw error
+  } else {
+    const { error } = await supabase
+      .from('special_feature_ratings')
+      .upsert(
+        {
+          user_id: userId,
+          release_id: releaseId,
+          special_feature_id: specialFeatureId,
+          rating,
+        },
+        { onConflict: 'user_id, special_feature_id' },
+      )
+    if (error) throw error
+  }
+}
+
+export async function fetchUserFeatureRatings(
+  releaseIds: string[],
+  userId: string,
+): Promise<Map<string, 1 | -1>> {
+  if (releaseIds.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('special_feature_ratings')
+    .select('special_feature_id, rating')
+    .eq('user_id', userId)
+    .in('release_id', releaseIds)
+
+  if (error) throw error
+
+  const map = new Map<string, 1 | -1>()
+  for (const row of data ?? []) {
+    map.set(row.special_feature_id, row.rating as 1 | -1)
+  }
+  return map
 }

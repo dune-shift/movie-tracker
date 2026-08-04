@@ -24,6 +24,7 @@ export interface SpecialFeature {
   name: string
   category?: SpecialFeatureCategory | ''
   disc?: number | ''
+  userRating?: 1 | -1 | null
 }
 
 export const GENRE_OPTIONS = [
