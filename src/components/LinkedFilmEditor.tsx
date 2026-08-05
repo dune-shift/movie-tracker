@@ -54,6 +54,13 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
   const blindBuyInfoRef = useRef<HTMLDivElement>(null)
   const blindBuyBtnRef = useRef<HTMLButtonElement>(null)
 
+  // Local buffer for the date input so the native picker isn't fighting
+  // React re-renders caused by autoSave.
+  const [dateValue, setDateValue] = useState('')
+  useEffect(() => {
+    setDateValue(draft.watchedAt ? draft.watchedAt.slice(0, 10) : '')
+  }, [draft.watchedAt])
+
   // Position the tooltip relative to the viewport (not the card) so the
   // card's `overflow-hidden` (used to clip the poster thumbnail) never
   // clips the tooltip text.
@@ -399,21 +406,40 @@ export function LinkedFilmEditor({ film, onSave, onRemove, showFilmHeader = true
             </div>
           ) : (
             /* Single "Mark as watched" when no formats specified */
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={!!draft.watchedAt}
-                onChange={(e) =>
-                  update({ watchedAt: e.target.checked ? new Date().toISOString() : null })
-                }
-                className="accent-accent h-3.5 w-3.5 flex-shrink-0"
-              />
-              <span className="text-[11px] text-muted">
-                {draft.watchedAt
-                  ? `Watched · ${new Date(draft.watchedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                  : 'Mark as watched'}
-              </span>
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!draft.watchedAt}
+                  onChange={(e) =>
+                    update({ watchedAt: e.target.checked ? new Date().toISOString() : null })
+                  }
+                  className="accent-accent h-3.5 w-3.5 flex-shrink-0"
+                />
+                <span className="text-[11px] text-muted">
+                  {draft.watchedAt ? 'Watched' : 'Mark as watched'}
+                </span>
+              </label>
+              {draft.watchedAt && (
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="YYYY-MM-DD"
+                  value={dateValue}
+                  onChange={(e) => setDateValue(e.target.value)}
+                  onBlur={(e) => {
+                    const date = e.target.value
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                      update({ watchedAt: new Date(`${date}T00:00:00`).toISOString() })
+                    } else {
+                      // Invalid format — reset to the last saved date
+                      setDateValue(draft.watchedAt ? draft.watchedAt.slice(0, 10) : '')
+                    }
+                  }}
+                  className="w-28 rounded-md border border-border bg-surface-overlay px-2 py-0.5 text-[11px] text-white placeholder-muted/40 outline-none focus:border-accent"
+                />
+              )}
+            </div>
           )}
         </div>
       )}

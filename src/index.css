@@ -24,6 +24,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Make date inputs visible in dark mode */
+input[type='date'] {
+  color-scheme: dark;
+}
+
 #root {
   min-height: 100vh;
 }

@@ -284,7 +284,7 @@ export async function updateRelease(
 
     let q = supabase.from('special_features').delete().eq('release_id', id)
     if (keptIds.length > 0) {
-      q = q.not('id', 'in', `(${keptIds.map((x) => `'${x}'`).join(',')})`)
+      q = q.not('id', 'in', `(${keptIds.join(',')})`)
     }
     const { error: delErr } = await q
     if (delErr) throw delErr
