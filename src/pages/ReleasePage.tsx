@@ -24,9 +24,7 @@ import {
   getFilmDetails,
   getPosterUrl,
   getProviderLogoUrl,
-  getReleaseYear,
   getWatchProviders,
-  searchFilms,
 } from '../services/tmdb'
 
 interface ReleasePageProps {

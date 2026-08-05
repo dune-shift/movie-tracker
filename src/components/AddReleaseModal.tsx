@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Release, LinkedFilm, Film } from '../types'
 import { toLinkedFilm } from '../queries/collection'
-import { getPosterUrl, getReleaseYear } from '../services/tmdb'
+import { getPosterUrl } from '../services/tmdb'
 import { uploadCoverImage } from '../services/storage'
 import { fetchLabels } from '../services/db'
 import { BarcodeScanner } from './BarcodeScanner'
