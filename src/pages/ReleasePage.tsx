@@ -605,9 +605,11 @@ export function ReleasePage({ releases, onUpdate, onRemove, onRateFeature }: Rel
                                     aria-label={`Thumbs up ${feat.name}`}
                                     title="Thumbs up"
                                   >
-                                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                                      <path d="M1 8.25a1.25 1.25 0 1 1 2.5 0v7.5a1.25 1.25 0 1 1-2.5 0v-7.5zM11 3a1 1 0 0 0-1 1v7.268a2 2 0 0 1 .623 1.338l.166 1.456c.04.346.237.646.487.876.24.221.536.324.724.324.1 0 .19-.027.274-.072a2.09 2.09 0 0 0 .794-1.128l.6-2.67c.028-.131.102-.248.21-.338A1.998 1.998 0 0 0 15.5 10V6a1 1 0 0 0-1-1h-3.5z" />
-                                    </svg>
+                                    <i
+                                      className={`h-4 w-4 ${
+                                        feat.userRating === 1 ? 'fa-solid fa-thumbs-up' : 'fa-regular fa-thumbs-up'
+                                      }`}
+                                    />
                                   </button>
                                   <button
                                     type="button"
@@ -620,9 +622,11 @@ export function ReleasePage({ releases, onUpdate, onRemove, onRateFeature }: Rel
                                     aria-label={`Thumbs down ${feat.name}`}
                                     title="Thumbs down"
                                   >
-                                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                                      <path d="M18.902 11.25a1.25 1.25 0 1 1-2.5 0v-7.5a1.25 1.25 0 1 1 2.5 0v7.5zM8.902 17v-1.992a2 2 0 0 1-.602-1.291l-.233-1.444a.86.86 0 0 0-.375-.648c-.234-.173-.537-.26-.837-.26a1.033 1.033 0 0 0-.353.071 2.07 2.07 0 0 0-.855 1.153l-.651 2.695a.52.52 0 0 1-.211.315A2 2 0 0 1 4.5 17v4a1 1 0 0 0 1 1h3.5a1 1 0 0 0 1-1v-4z" />
-                                    </svg>
+                                    <i
+                                      className={`h-4 w-4 ${
+                                        feat.userRating === -1 ? 'fa-solid fa-thumbs-down' : 'fa-regular fa-thumbs-down'
+                                      }`}
+                                    />
                                   </button>
                                 </div>
                                 <button
